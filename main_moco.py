@@ -36,6 +36,8 @@ import moco.optimizer
 
 import vits
 
+from load_custom_data import CustomImageDataset
+
 
 torchvision_model_names = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
@@ -254,9 +256,17 @@ def main_worker(gpu, ngpus_per_node, args):
     cudnn.benchmark = True
 
     # Data loading code
-    traindir = os.path.join(args.data, 'train')
+    traindir = args.data
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
+
+    # directly resize original image for complete semantic information
+    augmentation0=[
+        transforms.Resize((224,224)),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        normalize
+    ]
 
     # follow BYOL's augmentation recipe: https://arxiv.org/abs/2006.07733
     augmentation1 = [
@@ -283,17 +293,24 @@ def main_worker(gpu, ngpus_per_node, args):
         transforms.ToTensor(),
         normalize
     ]
+    # TODO: load my own dataset
+    # train_dataset = datasets.ImageFolder(
+    #     traindir,
+    #     moco.loader.TwoCropsTransform(transforms.Compose(augmentation1), 
+    #                                   transforms.Compose(augmentation2)))
 
-    train_dataset = datasets.ImageFolder(
-        traindir,
-        moco.loader.TwoCropsTransform(transforms.Compose(augmentation1), 
-                                      transforms.Compose(augmentation2)))
+    train_dataset=CustomImageDataset(os.path.join(traindir,"ImgList.csv"),
+                                    traindir,moco.loader.TwoCropsTransformWithItself(
+                                        transforms.Compose(augmentation0),
+                                        transforms.Compose(augmentation1),
+                                        transforms.Compose(augmentation2))
+                                        )
 
     if args.distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
     else:
         train_sampler = None
-
+    
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
         num_workers=args.workers, pin_memory=True, sampler=train_sampler, drop_last=True)
@@ -313,7 +330,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 'state_dict': model.state_dict(),
                 'optimizer' : optimizer.state_dict(),
                 'scaler': scaler.state_dict(),
-            }, is_best=False, filename='checkpoint_%04d.pth.tar' % epoch)
+            }, is_best=False, filename='ckpt/%s/batchsize%04d/%s_batchsize%04d_checkpoint_%04d.pth.tar' % (args.arch,args.batch_size,epoch))
 
     if args.rank == 0:
         summary_writer.close()
@@ -334,7 +351,7 @@ def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):
     end = time.time()
     iters_per_epoch = len(train_loader)
     moco_m = args.moco_m
-    for i, (images, _) in enumerate(train_loader):
+    for i, (anchor_images, nanchor_images) in enumerate(train_loader):
         # measure data loading time
         data_time.update(time.time() - end)
 
@@ -345,14 +362,14 @@ def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):
             moco_m = adjust_moco_momentum(epoch + i / iters_per_epoch, args)
 
         if args.gpu is not None:
-            images[0] = images[0].cuda(args.gpu, non_blocking=True)
-            images[1] = images[1].cuda(args.gpu, non_blocking=True)
+            anchor_images = anchor_images.cuda(args.gpu, non_blocking=True)
+            nanchor_images = nanchor_images.cuda(args.gpu, non_blocking=True)
 
         # compute output
         with torch.cuda.amp.autocast(True):
-            loss = model(images[0], images[1], moco_m)
+            loss = model(anchor_images, nanchor_images, moco_m)
 
-        losses.update(loss.item(), images[0].size(0))
+        losses.update(loss.item(), anchor_images[0].size(0))
         if args.rank == 0:
             summary_writer.add_scalar("loss", loss.item(), epoch * iters_per_epoch + i)
 
@@ -371,6 +388,10 @@ def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):
 
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
+    par_dir=os.path.dirname(filename)
+    if os.path.exists(par_dir) is not True:
+        os.makedirs(par_dir)
+
     torch.save(state, filename)
     if is_best:
         shutil.copyfile(filename, 'model_best.pth.tar')

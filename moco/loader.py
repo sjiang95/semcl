@@ -8,6 +8,7 @@ from PIL import Image, ImageFilter, ImageOps
 import math
 import random
 import torchvision.transforms.functional as tf
+import torch
 
 
 class TwoCropsTransform:
@@ -22,6 +23,19 @@ class TwoCropsTransform:
         im2 = self.base_transform2(x)
         return [im1, im2]
 
+class TwoCropsTransformWithItself:
+    """Take two random crops of one image"""
+
+    def __init__(self, base_transform0, base_transform1, base_transform2):
+        self.base_transform0 = base_transform0
+        self.base_transform1 = base_transform1
+        self.base_transform2 = base_transform2
+
+    def __call__(self, x):
+        im0 = self.base_transform0(x)
+        im1 = self.base_transform1(x)
+        im2 = self.base_transform2(x)
+        return torch.stack([im0, im1, im2])
 
 class GaussianBlur(object):
     """Gaussian blur augmentation from SimCLR: https://arxiv.org/abs/2002.05709"""

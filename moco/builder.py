@@ -7,6 +7,7 @@
 import torch
 import torch.nn as nn
 
+from info_nce import InfoNCE
 
 class MoCo(nn.Module):
     """
@@ -27,6 +28,9 @@ class MoCo(nn.Module):
         self.base_encoder = base_encoder(num_classes=mlp_dim)
         self.momentum_encoder = base_encoder(num_classes=mlp_dim)
 
+        #InfoNCE
+        self.infonce=InfoNCE(temperature=T,negative_mode='paired')
+
         self._build_projector_and_predictor_mlps(dim, mlp_dim)
 
         for param_b, param_m in zip(self.base_encoder.parameters(), self.momentum_encoder.parameters()):
@@ -36,13 +40,17 @@ class MoCo(nn.Module):
     def _build_mlp(self, num_layers, input_dim, mlp_dim, output_dim, last_bn=True):
         mlp = []
         for l in range(num_layers):
+            #set input dim of mlp
             dim1 = input_dim if l == 0 else mlp_dim
+            #set output dim of mlp
             dim2 = output_dim if l == num_layers - 1 else mlp_dim
-
+            #add mlp layer
             mlp.append(nn.Linear(dim1, dim2, bias=False))
 
-            if l < num_layers - 1:
+            if l < num_layers - 1:#if it is not the last mlp layer
+                #add bachnorm
                 mlp.append(nn.BatchNorm1d(dim2))
+                #and relu
                 mlp.append(nn.ReLU(inplace=True))
             elif last_bn:
                 # follow SimCLR's design: https://github.com/google-research/simclr/blob/master/model_util.py#L157
@@ -67,10 +75,25 @@ class MoCo(nn.Module):
         # gather all targets
         k = concat_all_gather(k)
         # Einstein sum is more intuitive
-        logits = torch.einsum('nc,mc->nm', [q, k]) / self.T
-        N = logits.shape[0]  # batch size per GPU
-        labels = (torch.arange(N, dtype=torch.long) + N * torch.distributed.get_rank()).cuda()
+        logits = torch.einsum('nc,mc->nm', [q, k]) / self.T #m=n
+        N = logits.shape[0]  # =n, batch size per GPU
+        labels = (torch.arange(N, dtype=torch.long) + N * torch.distributed.get_rank()).cuda()# every image in a batch belongs to its own class
+        # anchor, pos1 and pos2 are in the same class, so 
+        labels = torch.tensor([0,0,0,1,1,1]).cuda()
         return nn.CrossEntropyLoss()(logits, labels) * (2 * self.T)
+    # TODO: loss function for multiple positive and multiple negative pairs 
+    def LossInOneSample(self, q, k_poss, k_negs):
+        """
+        calculate InfoNCE among one anchor and its augmented samples
+        Input:
+            q: anchor feature
+            k_poss: tensor of positive samples feature tensors
+            k_negs: tensor of negative samples feature tensors
+        Output:
+            loss
+        """
+
+
 
     def forward(self, x1, x2, m):
         """
@@ -83,17 +106,25 @@ class MoCo(nn.Module):
         """
 
         # compute features
-        q1 = self.predictor(self.base_encoder(x1))
-        q2 = self.predictor(self.base_encoder(x2))
+        # q_0 = self.predictor(self.base_encoder(torch.squeeze(x1[:,0])))
+        q_1 = self.predictor(self.base_encoder(torch.squeeze(x1[:,1])))
+        q_2 = self.predictor(self.base_encoder(torch.squeeze(x1[:,2])))
 
         with torch.no_grad():  # no gradient
             self._update_momentum_encoder(m)  # update the momentum encoder
 
             # compute momentum features as targets
-            k1 = self.momentum_encoder(x1)
-            k2 = self.momentum_encoder(x2)
+            # k_pos0 = self.momentum_encoder(torch.squeeze(x1[:,0]))
+            k_pos1 = self.momentum_encoder(torch.squeeze(x1[:,1]))
+            k_pos2 = self.momentum_encoder(torch.squeeze(x1[:,2]))
 
-        return self.contrastive_loss(q1, k2) + self.contrastive_loss(q2, k1)
+            k_neg0 = self.momentum_encoder(torch.squeeze(x2[:,0]))
+            k_neg1 = self.momentum_encoder(torch.squeeze(x2[:,1]))
+            k_neg2 = self.momentum_encoder(torch.squeeze(x2[:,2]))
+
+        loss=self.infonce(q_1,k_pos2,negative_keys=torch.stack([k_neg0,k_neg1,k_neg2],dim=1))+self.infonce(q_2,k_pos1,negative_keys=torch.stack([k_neg0,k_neg1,k_neg2],dim=1))
+
+        return loss
 
 
 class MoCo_ResNet(MoCo):
