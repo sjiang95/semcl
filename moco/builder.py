@@ -81,19 +81,6 @@ class MoCo(nn.Module):
         # anchor, pos1 and pos2 are in the same class, so 
         labels = torch.tensor([0,0,0,1,1,1]).cuda()
         return nn.CrossEntropyLoss()(logits, labels) * (2 * self.T)
-    # TODO: loss function for multiple positive and multiple negative pairs 
-    def LossInOneSample(self, q, k_poss, k_negs):
-        """
-        calculate InfoNCE among one anchor and its augmented samples
-        Input:
-            q: anchor feature
-            k_poss: tensor of positive samples feature tensors
-            k_negs: tensor of negative samples feature tensors
-        Output:
-            loss
-        """
-
-
 
     def forward(self, x1, x2, m):
         """
@@ -122,6 +109,7 @@ class MoCo(nn.Module):
             k_neg1 = self.momentum_encoder(torch.squeeze(x2[:,1]))
             k_neg2 = self.momentum_encoder(torch.squeeze(x2[:,2]))
 
+        # TODO: use all other samples in the same batch as negative samples if current method performs bad
         loss=self.infonce(q_1,k_pos2,negative_keys=torch.stack([k_neg0,k_neg1,k_neg2],dim=1))+self.infonce(q_2,k_pos1,negative_keys=torch.stack([k_neg0,k_neg1,k_neg2],dim=1))
 
         return loss

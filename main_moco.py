@@ -118,6 +118,10 @@ parser.add_argument('--warmup-epochs', default=10, type=int, metavar='N',
                     help='number of warmup epochs')
 parser.add_argument('--crop-min', default=0.08, type=float,
                     help='minimum scale for random cropping (default: 0.08)')
+                    
+# choose datasets to load
+parser.add_argument('--choose-dataset', default=['coco', 'ade'], nargs='+',
+                    help='arbitrary combine coco, ade20k and voc2012 datasets')
 
 
 def main():
@@ -299,12 +303,15 @@ def main_worker(gpu, ngpus_per_node, args):
     #     moco.loader.TwoCropsTransform(transforms.Compose(augmentation1), 
     #                                   transforms.Compose(augmentation2)))
 
-    train_dataset=CustomImageDataset(os.path.join(traindir,"ImgList.csv"),
-                                    traindir,moco.loader.TwoCropsTransformWithItself(
-                                        transforms.Compose(augmentation0),
-                                        transforms.Compose(augmentation1),
-                                        transforms.Compose(augmentation2))
-                                        )
+    list_datasets=args.choose_dataset
+
+    train_dataset=CustomImageDataset(traindir,
+                                    moco.loader.TwoCropsTransformWithItself(
+                                    transforms.Compose(augmentation0),
+                                    transforms.Compose(augmentation1),
+                                    transforms.Compose(augmentation2)),
+                                    datasets= list_datasets
+                                    )
 
     if args.distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
@@ -322,6 +329,13 @@ def main_worker(gpu, ngpus_per_node, args):
         # train for one epoch
         train(train_loader, model, optimizer, scaler, summary_writer, epoch, args)
 
+        dataset_str=""
+        for i,dataset in enumerate(list_datasets):
+            if i==len(list_datasets)-1:
+                dataset_str=dataset_str+dataset
+            else:
+                dataset_str=dataset_str+dataset+"N"
+        
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                 and args.rank == 0): # only the first GPU saves checkpoint
             save_checkpoint({
@@ -330,7 +344,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 'state_dict': model.state_dict(),
                 'optimizer' : optimizer.state_dict(),
                 'scaler': scaler.state_dict(),
-            }, is_best=False, filename='ckpt/%s/batchsize%04d/%s_batchsize%04d_checkpoint_%04d.pth.tar' % (args.arch,args.batch_size,epoch))
+            }, is_best=False, filename='ckpt/%s/%s/batchsize%04d/checkpoint_%04d.pth.tar' % (dataset_str,args.arch,args.batch_size,epoch))
 
     if args.rank == 0:
         summary_writer.close()

@@ -111,7 +111,7 @@ With a batch size of 4096, the training can fit into 2 nodes with a total of 16 
 
 #### ViT-Small with 1-node (8-GPU) training, batch 1024
 
-```
+```python
 python main_moco.py \
   -a vit_small -b 1024 \
   --optimizer=adamw --lr=1.5e-4 --weight-decay=.1 \

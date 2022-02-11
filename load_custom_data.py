@@ -8,8 +8,26 @@ import pandas as pd
 from PIL import Image
 
 class CustomImageDataset(Dataset):
-    def __init__(self, list_filename, img_dir, transform=None, target_transform=None):
-        self.img_lists = pd.read_csv(list_filename)
+    def __init__(self, img_dir, transform=None, target_transform=None, datasets=['coco', 'ade']):
+        self.img_lists = pd.DataFrame(columns = ['anchor','nanchor'])
+        for OneDataset in datasets:
+            if OneDataset=='voc':
+                VOCImgListCSV=pd.read_csv(os.path.join(img_dir,"VOC_ImgList.csv"))
+                self.img_lists=self.img_lists.append(VOCImgListCSV,ignore_index=True)
+                print("VOC2012 added")
+            elif OneDataset=='coco':
+                COCOImgListCSV=pd.read_csv(os.path.join(img_dir,"COCO_ImgList.csv"))
+                self.img_lists=self.img_lists.append(COCOImgListCSV,ignore_index=True)
+                print("COCO added")
+            elif OneDataset=='ade':
+                ADEImgListCSV=pd.read_csv(os.path.join(img_dir,"ADE_ImgList.csv"))
+                self.img_lists=self.img_lists.append(ADEImgListCSV,ignore_index=True)
+                print("ADE20K added")
+            else:
+                raise ValueError("Unrecognize dataset choice.")
+        
+        print("%d samples will be used." % len(self.img_lists))
+
         self.img_dir = img_dir
         self.transform = transform
         self.target_transform = target_transform
