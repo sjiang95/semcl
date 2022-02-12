@@ -196,6 +196,9 @@ def main_worker(gpu, ngpus_per_node, args):
     # infer learning rate before changing batch size
     args.lr = args.lr * args.batch_size / 256
 
+    # store total batch_size 
+    total_batch_size=args.batch_size
+
     if not torch.cuda.is_available():
         print('using CPU, this will be slow')
     elif args.distributed:
@@ -347,7 +350,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 'state_dict': model.state_dict(),
                 'optimizer' : optimizer.state_dict(),
                 'scaler': scaler.state_dict(),
-            }, is_best=False, filename='ckpt/%s/%s/batchsize%04d/checkpoint_%04d.pth.tar' % (dataset_str,args.arch,args.batch_size,epoch))
+            }, is_best=False, filename='ckpt/%s/%s/batchsize%04d/checkpoint_%04d.pth.tar' % (dataset_str,args.arch,total_batch_size,epoch))
 
     if args.rank == 0:
         summary_writer.close()
