@@ -15,6 +15,7 @@ import shutil
 import time
 import warnings
 from functools import partial
+import multiprocessing
 
 import torch
 import torch.nn as nn
@@ -53,7 +54,7 @@ parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet50',
                     help='model architecture: ' +
                         ' | '.join(model_names) +
                         ' (default: resnet50)')
-parser.add_argument('-j', '--workers', default=32, type=int, metavar='N',
+parser.add_argument('-j', '--workers', default=multiprocessing.cpu_count(), type=int, metavar='N',
                     help='number of data loading workers (default: 32)')
 parser.add_argument('--epochs', default=100, type=int, metavar='N',
                     help='number of total epochs to run')
@@ -225,7 +226,7 @@ def main_worker(gpu, ngpus_per_node, args):
     else:
         # AllGather/rank implementation in this code only supports DistributedDataParallel.
         raise NotImplementedError("Only DistributedDataParallel is supported.")
-    print(model) # print model after SyncBatchNorm
+    # print(model) # print model after SyncBatchNorm
 
     if args.optimizer == 'lars':
         optimizer = moco.optimizer.LARS(model.parameters(), args.lr,
@@ -318,6 +319,7 @@ def main_worker(gpu, ngpus_per_node, args):
     else:
         train_sampler = None
     
+    print("Use %d workers in torch.utils.data.DataLoader on each GPU." % args.workers)
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
         num_workers=args.workers, pin_memory=True, sampler=train_sampler, drop_last=True)
@@ -338,6 +340,7 @@ def main_worker(gpu, ngpus_per_node, args):
         
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                 and args.rank == 0): # only the first GPU saves checkpoint
+                # TODO: save state only when epoch is divisible by five
             save_checkpoint({
                 'epoch': epoch + 1,
                 'arch': args.arch,
