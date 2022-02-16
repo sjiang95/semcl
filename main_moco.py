@@ -124,6 +124,14 @@ parser.add_argument('--crop-min', default=0.08, type=float,
 parser.add_argument('--choose-dataset', default=['coco', 'ade'], nargs='+',
                     help='arbitrary combine coco, ade20k and voc2012 datasets')
 
+# choose negative mode
+parser.add_argument('--negative-mode', default='unpaired', type=str,
+                    choices=['paired', 'unpaired'],
+                    help='Determines how the (optional) negative_keys are handled. Value must be one of ["paired", "unpaired"].')
+
+# choose negative mode
+parser.add_argument('--output-dir', default='.', type=str,
+                    help='Output path. Default is current path.')
 
 def main():
     args = parser.parse_args()
@@ -182,6 +190,19 @@ def main_worker(gpu, ngpus_per_node, args):
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                 world_size=args.world_size, rank=args.rank)
         torch.distributed.barrier()
+
+    if args.negative_mode=='paired':
+        print("Negative mode: paired")
+    elif args.negative_mode=='unpaired':
+        print("Negative mode: unpaired")
+    else:
+        raise ValueError("Unknown negative mode: ", args.negative_mode)
+
+    if args.output_dir=='.':
+        print("Checkpoints will be written to current folder.")
+    else:
+        print("Checkpoints will be written to %s." % (args.output_dir))
+
     # create model
     print("=> creating model '{}'".format(args.arch))
     if args.arch.startswith('vit'):
@@ -191,7 +212,7 @@ def main_worker(gpu, ngpus_per_node, args):
     else:
         model = moco.builder.MoCo_ResNet(
             partial(torchvision_models.__dict__[args.arch], zero_init_residual=True), 
-            args.moco_dim, args.moco_mlp_dim, args.moco_t)
+            args.moco_dim, args.moco_mlp_dim, args.moco_t, args.negative_mode)
 
     # infer learning rate before changing batch size
     args.lr = args.lr * args.batch_size / 256
@@ -350,7 +371,10 @@ def main_worker(gpu, ngpus_per_node, args):
                 'state_dict': model.state_dict(),
                 'optimizer' : optimizer.state_dict(),
                 'scaler': scaler.state_dict(),
-            }, is_best=False, filename='ckpt/%s/%s/batchsize%04d/checkpoint_%04d.pth.tar' % (dataset_str,args.arch,total_batch_size,epoch))
+            }, is_best=False, filename=os.path.join(args.output_dir,
+                                                    ('ckpt/%s/%s/batchsize%04d/checkpoint_%04d.pth.tar' % (dataset_str,args.arch,total_batch_size,epoch))
+                                                    )
+            )
 
     if args.rank == 0:
         summary_writer.close()
