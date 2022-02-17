@@ -14,7 +14,7 @@ class MoCo(nn.Module):
     Build a MoCo model with a base encoder, a momentum encoder, and two MLPs
     https://arxiv.org/abs/1911.05722
     """
-    def __init__(self, base_encoder, dim=256, mlp_dim=4096, T=1.0):
+    def __init__(self, base_encoder, dim=256, mlp_dim=4096, T=1.0,negative_mode='unpaired'):
         """
         dim: feature dimension (default: 256)
         mlp_dim: hidden dimension in MLPs (default: 4096)
@@ -29,7 +29,7 @@ class MoCo(nn.Module):
         self.momentum_encoder = base_encoder(num_classes=mlp_dim)
 
         #InfoNCE
-        self.infonce=InfoNCE(temperature=T,negative_mode='paired')
+        self.infonce=InfoNCE(temperature=T,negative_mode=negative_mode)
 
         self._build_projector_and_predictor_mlps(dim, mlp_dim)
 
@@ -91,7 +91,7 @@ class MoCo(nn.Module):
         Output:
             loss
         """
-
+        loss=None
         # compute features
         # q_0 = self.predictor(self.base_encoder(torch.squeeze(x1[:,0])))
         q_1 = self.predictor(self.base_encoder(torch.squeeze(x1[:,1])))
@@ -109,11 +109,14 @@ class MoCo(nn.Module):
             k_neg1 = self.momentum_encoder(torch.squeeze(x2[:,1]))
             k_neg2 = self.momentum_encoder(torch.squeeze(x2[:,2]))
 
-        # TODO: use all other samples in the same batch as negative samples if current method performs bad
-        loss=self.infonce(q_1,k_pos2,negative_keys=torch.stack([k_neg0,k_neg1,k_neg2],dim=1))+self.infonce(q_2,k_pos1,negative_keys=torch.stack([k_neg0,k_neg1,k_neg2],dim=1))
-
-        return loss
-
+            # TODO: use all other samples in the same batch as negative samples if current method performs bad
+            if self.infonce.negative_mode=='paired':
+                loss=self.infonce(q_1,k_pos2,negative_keys=torch.stack([k_neg0,k_neg1,k_neg2],dim=1))+self.infonce(q_2,k_pos1,negative_keys=torch.stack([k_neg0,k_neg1,k_neg2],dim=1))
+                return loss
+            elif self.infonce.negative_mode=='unpaired':
+                k_neg=torch.cat([k_neg0,k_neg1,k_neg2],dim=0)
+                loss=self.infonce(q_1,k_pos2,negative_keys=k_neg)+self.infonce(q_2,k_pos1,negative_keys=k_neg)
+                return loss
 
 class MoCo_ResNet(MoCo):
     def _build_projector_and_predictor_mlps(self, dim, mlp_dim):
