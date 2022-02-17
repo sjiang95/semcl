@@ -13,15 +13,15 @@ class CustomImageDataset(Dataset):
         for OneDataset in datasets:
             if OneDataset=='voc':
                 VOCImgListCSV=pd.read_csv(os.path.join(img_dir,"VOC_ImgList.csv"))
-                self.img_df=self.img_df.append(VOCImgListCSV,ignore_index=True)
+                self.img_df=pd.concat([self.img_df,VOCImgListCSV],ignore_index=True)
                 print("VOC2012 added")
             elif OneDataset=='coco':
                 COCOImgListCSV=pd.read_csv(os.path.join(img_dir,"COCO_ImgList.csv"))
-                self.img_df=self.img_df.append(COCOImgListCSV,ignore_index=True)
+                self.img_df=pd.concat([self.img_df,COCOImgListCSV],ignore_index=True)
                 print("COCO added")
             elif OneDataset=='ade':
                 ADEImgListCSV=pd.read_csv(os.path.join(img_dir,"ADE_ImgList.csv"))
-                self.img_df=self.img_df.append(ADEImgListCSV,ignore_index=True)
+                self.img_df=pd.concat([self.img_df,ADEImgListCSV],ignore_index=True)
                 print("ADE20K added")
             else:
                 raise ValueError("Unrecognize dataset choice.")
