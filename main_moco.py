@@ -371,7 +371,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 'optimizer' : optimizer.state_dict(),
                 'scaler': scaler.state_dict(),
             }, is_best=False, filename=os.path.join(args.output_dir,
-                                                    ('ckpt/%s/%s/%s/batchsize%04d/checkpoint_%s_%s_%s_batchsize%04d_%04d.pth.tar' % (dataset_str,args.arch,args.negative_mode, total_batch_size,
+                                                    ('ckpt/%s/%s/%s/batchsize%04d/checkpoint_%s_%s_%s_batchsize%04d_epoch%04d.pth.tar' % (dataset_str,args.arch,args.negative_mode, total_batch_size,
                                                      dataset_str,args.arch,args.negative_mode,total_batch_size,epoch))
                                                     )
             )
