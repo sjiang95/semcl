@@ -125,7 +125,7 @@ parser.add_argument('--choose-dataset', default=['coco', 'ade'], nargs='+',
                     help='arbitrary combine coco, ade20k and voc2012 datasets')
 
 # choose negative mode
-parser.add_argument('--negative-mode', default='unpaired', type=str,
+parser.add_argument('--negative-mode', default='paired', type=str,
                     choices=['paired', 'unpaired'],
                     help='Determines how the (optional) negative_keys are handled. Value must be one of ["paired", "unpaired"].')
 
@@ -298,7 +298,9 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # follow BYOL's augmentation recipe: https://arxiv.org/abs/2006.07733
     augmentation1 = [
-        transforms.RandomResizedCrop(224, scale=(args.crop_min, 1.)),
+        transforms.Resize(224),
+        transforms.RandomCrop(224),
+        # transforms.RandomResizedCrop(224, scale=(args.crop_min, 1.)),
         transforms.RandomApply([
             transforms.ColorJitter(0.4, 0.4, 0.2, 0.1)  # not strengthened
         ], p=0.8),
@@ -310,7 +312,9 @@ def main_worker(gpu, ngpus_per_node, args):
     ]
 
     augmentation2 = [
-        transforms.RandomResizedCrop(224, scale=(args.crop_min, 1.)),
+        transforms.Resize(224),
+        transforms.RandomCrop(224),
+        # transforms.RandomResizedCrop(224, scale=(args.crop_min, 1.)),
         transforms.RandomApply([
             transforms.ColorJitter(0.4, 0.4, 0.2, 0.1)  # not strengthened
         ], p=0.8),
@@ -330,7 +334,7 @@ def main_worker(gpu, ngpus_per_node, args):
     list_datasets=args.choose_dataset
 
     train_dataset=CustomImageDataset(traindir,
-                                    moco.loader.TwoCropsTransformWithItself(
+                                    transform= moco.loader.TwoCropsTransformWithItself(
                                     transforms.Compose(augmentation0),
                                     transforms.Compose(augmentation1),
                                     transforms.Compose(augmentation2)),
