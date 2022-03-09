@@ -14,7 +14,7 @@ class MoCo(nn.Module):
     Build a MoCo model with a base encoder, a momentum encoder, and two MLPs
     https://arxiv.org/abs/1911.05722
     """
-    def __init__(self, base_encoder, dim=256, mlp_dim=4096, T=1.0,negative_mode='unpaired'):
+    def __init__(self, base_encoder, dim=256, mlp_dim=4096, T=1.0,negative_mode='paired'):
         """
         dim: feature dimension (default: 256)
         mlp_dim: hidden dimension in MLPs (default: 4096)
@@ -75,11 +75,9 @@ class MoCo(nn.Module):
         # gather all targets
         k = concat_all_gather(k)
         # Einstein sum is more intuitive
-        logits = torch.einsum('nc,mc->nm', [q, k]) / self.T #m=n
-        N = logits.shape[0]  # =n, batch size per GPU
-        labels = (torch.arange(N, dtype=torch.long) + N * torch.distributed.get_rank()).cuda()# every image in a batch belongs to its own class
-        # anchor, pos1 and pos2 are in the same class, so 
-        labels = torch.tensor([0,0,0,1,1,1]).cuda()
+        logits = torch.einsum('nc,mc->nm', [q, k]) / self.T
+        N = logits.shape[0]  # batch size per GPU
+        labels = (torch.arange(N, dtype=torch.long) + N * torch.distributed.get_rank()).cuda()
         return nn.CrossEntropyLoss()(logits, labels) * (2 * self.T)
 
     def forward(self, x1, x2, m):
@@ -94,14 +92,18 @@ class MoCo(nn.Module):
         loss=None
         # compute features
         # q_0 = self.predictor(self.base_encoder(torch.squeeze(x1[:,0])))
-        q_1 = self.predictor(self.base_encoder(torch.squeeze(x1[:,1])))
-        q_2 = self.predictor(self.base_encoder(torch.squeeze(x1[:,2])))
+        q_01 = self.predictor(self.base_encoder(torch.squeeze(x1[:,1])))
+        q_02 = self.predictor(self.base_encoder(torch.squeeze(x1[:,2])))
+
+        # q_10 = self.predictor(self.base_encoder(torch.squeeze(x2[:,0])))
+        q_11 = self.predictor(self.base_encoder(torch.squeeze(x2[:,1])))
+        q_12 = self.predictor(self.base_encoder(torch.squeeze(x2[:,2])))
 
         with torch.no_grad():  # no gradient
             self._update_momentum_encoder(m)  # update the momentum encoder
 
             # compute momentum features as targets
-            # k_pos0 = self.momentum_encoder(torch.squeeze(x1[:,0]))
+            k_pos0 = self.momentum_encoder(torch.squeeze(x1[:,0]))
             k_pos1 = self.momentum_encoder(torch.squeeze(x1[:,1]))
             k_pos2 = self.momentum_encoder(torch.squeeze(x1[:,2]))
 
@@ -109,14 +111,25 @@ class MoCo(nn.Module):
             k_neg1 = self.momentum_encoder(torch.squeeze(x2[:,1]))
             k_neg2 = self.momentum_encoder(torch.squeeze(x2[:,2]))
 
-            # TODO: use all other samples in the same batch as negative samples if current method performs bad
-            if self.infonce.negative_mode=='paired':
-                loss=self.infonce(q_1,k_pos2,negative_keys=torch.stack([k_neg0,k_neg1,k_neg2],dim=1))+self.infonce(q_2,k_pos1,negative_keys=torch.stack([k_neg0,k_neg1,k_neg2],dim=1))
-                return loss
-            elif self.infonce.negative_mode=='unpaired':
-                k_neg=torch.cat([k_neg0,k_neg1,k_neg2],dim=0)
-                loss=self.infonce(q_1,k_pos2,negative_keys=k_neg)+self.infonce(q_2,k_pos1,negative_keys=k_neg)
-                return loss
+        # TODO: use all other samples in the same batch as negative samples if current method performs bad
+        if self.infonce.negative_mode=='paired':
+            pos_keys_stack=torch.stack([k_pos0,k_pos1,k_pos2],dim=1)
+            neg_keys_stack=torch.stack([k_neg0,k_neg1,k_neg2],dim=1)
+
+            loss0=(self.infonce(q_01,k_pos2,negative_keys=neg_keys_stack)
+                +self.infonce(q_02,k_pos1,negative_keys=neg_keys_stack)
+                +self.infonce(q_11,k_neg2,negative_keys=pos_keys_stack)
+                +self.infonce(q_12,k_neg1,negative_keys=pos_keys_stack)
+            )
+            loss0=loss0/float(4.0)
+
+            loss1=self.contrastive_loss(q_01,k_pos2)+self.contrastive_loss(q_02,k_pos1)
+            
+            return loss0+loss1
+        elif self.infonce.negative_mode=='unpaired':
+            k_neg=torch.cat([k_neg0,k_neg1,k_neg2],dim=0)
+            loss=self.infonce(q_01,k_pos2,negative_keys=k_neg)+self.infonce(q_02,k_pos1,negative_keys=k_neg)
+            return loss
 
 class MoCo_ResNet(MoCo):
     def _build_projector_and_predictor_mlps(self, dim, mlp_dim):
