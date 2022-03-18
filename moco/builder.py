@@ -29,7 +29,7 @@ class MoCo(nn.Module):
         self.momentum_encoder = base_encoder(num_classes=mlp_dim)
 
         #InfoNCE
-        self.infonce=InfoNCE(temperature=T,negative_mode=negative_mode)
+        self.infonce=InfoNCE(temperature=T,reduction='sum',negative_mode=negative_mode)
 
         self._build_projector_and_predictor_mlps(dim, mlp_dim)
 
@@ -123,13 +123,21 @@ class MoCo(nn.Module):
             )
             loss0=loss0/float(4.0)
 
-            loss1=self.contrastive_loss(q_01,k_pos2)+self.contrastive_loss(q_02,k_pos1)
+            loss1=(self.contrastive_loss(q_01,k_pos2)
+                    +self.contrastive_loss(q_02,k_pos1)
+                    +self.contrastive_loss(q_11,k_neg2)
+                    +self.contrastive_loss(q_12,k_neg1)
+                    )/float(4.0)
             
-            return loss0+loss1
+            return loss0+loss1#
         elif self.infonce.negative_mode=='unpaired':
-            k_neg=torch.cat([k_neg0,k_neg1,k_neg2],dim=0)
-            loss=self.infonce(q_01,k_pos2,negative_keys=k_neg)+self.infonce(q_02,k_pos1,negative_keys=k_neg)
-            return loss
+            # k_neg=torch.cat([k_neg0,k_neg1,k_neg2],dim=0)
+            # loss=self.infonce(q_01,k_pos2,negative_keys=k_neg)+self.infonce(q_02,k_pos1,negative_keys=k_neg)
+            q_x1=torch.cat((q_01,q_11),dim=0)
+            q_x2=torch.cat((q_02,q_12),dim=0)
+            k_x1=torch.cat((k_pos1,k_neg1),dim=0)
+            k_x2=torch.cat((k_pos2,k_neg2),dim=0)
+            return self.contrastive_loss(q_x1,k_x2)+self.contrastive_loss(q_x2,k_x1)
 
 class MoCo_ResNet(MoCo):
     def _build_projector_and_predictor_mlps(self, dim, mlp_dim):
