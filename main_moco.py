@@ -274,8 +274,8 @@ def main_worker(gpu, ngpus_per_node, args):
                 checkpoint = torch.load(args.resume, map_location=loc)
             args.start_epoch = checkpoint['epoch']
             model.load_state_dict(checkpoint['state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer'])
-            scaler.load_state_dict(checkpoint['scaler'])
+            # optimizer.load_state_dict(checkpoint['optimizer'])
+            # scaler.load_state_dict(checkpoint['scaler'])
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(args.resume, checkpoint['epoch']))
         else:
@@ -379,6 +379,15 @@ def main_worker(gpu, ngpus_per_node, args):
                                                      dataset_str,args.arch,args.negative_mode,total_batch_size,epoch))
                                                     )
             )
+            print("Save checkpoint to ",('ckpt/%s/%s/%s/batchsize%04d/checkpoint_%s_%s_%s_batchsize%04d_epoch%04d.pth.tar' % (dataset_str,args.arch,args.negative_mode, total_batch_size, dataset_str,args.arch,args.negative_mode,total_batch_size,epoch)))
+            
+            previous_filename=os.path.join(args.output_dir,
+                                                    ('ckpt/%s/%s/%s/batchsize%04d/checkpoint_%s_%s_%s_batchsize%04d_epoch%04d.pth.tar' % (dataset_str,args.arch,args.negative_mode, total_batch_size,
+                                                     dataset_str,args.arch,args.negative_mode,total_batch_size,epoch-1))
+                                                    )
+            if os.path.exists(previous_filename):
+                with os.remove(previous_filename):
+                    print("Remove previous checkpoint: ",previous_filename)
 
     if args.rank == 0:
         summary_writer.close()
