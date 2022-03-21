@@ -16,6 +16,8 @@ import time
 import warnings
 from functools import partial
 import multiprocessing
+import requests
+from secretstorage import Item
 
 import torch
 import torch.nn as nn
@@ -46,6 +48,13 @@ torchvision_model_names = sorted(name for name in torchvision_models.__dict__
 
 model_names = ['vit_small', 'vit_base', 'vit_conv_small', 'vit_conv_base'] + torchvision_model_names
 
+pretrained_weight_url={
+    'resnet50': 'https://dl.fbaipublicfiles.com/moco-v3/r-50-1000ep/r-50-1000ep.pth.tar',
+    'resnet101': 'https://download.pytorch.org/models/resnet101-63fe2227.pth',
+    'vit_small': 'https://dl.fbaipublicfiles.com/moco-v3/vit-s-300ep/vit-s-300ep.pth.tar',
+    'vit_base': 'https://dl.fbaipublicfiles.com/moco-v3/vit-b-300ep/vit-b-300ep.pth.tar'
+}
+
 parser = argparse.ArgumentParser(description='MoCo ImageNet Pre-Training')
 parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
@@ -54,6 +63,8 @@ parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet50',
                     help='model architecture: ' +
                         ' | '.join(model_names) +
                         ' (default: resnet50)')
+parser.add_argument('--pretrained',default='',type=str, metavar='PATH',
+                    help="Path to pretrained weights having same architecture with --arch option.")
 parser.add_argument('-j', '--workers', default=multiprocessing.cpu_count(), type=int, metavar='N',
                     help='number of data loading workers (default: 32)')
 parser.add_argument('--epochs', default=100, type=int, metavar='N',
@@ -125,11 +136,11 @@ parser.add_argument('--choose-dataset', default=['coco', 'ade'], nargs='+',
                     help='arbitrary combine coco, ade20k and voc2012 datasets')
 
 # choose negative mode
-parser.add_argument('--negative-mode', default='L', type=str,
+parser.add_argument('--loss-mode', default='L', type=str,
                     choices=['L', 'L0','L1'],
                     help='Determines how the (optional) negative_keys are handled. Value must be one of ["paired", "unpaired"].')
 
-# choose negative mode
+# set checkpoints output dir
 parser.add_argument('--output-dir', default='.', type=str,
                     help='Output path. Default is current path.')
 
@@ -159,6 +170,22 @@ def main():
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
 
     ngpus_per_node = torch.cuda.device_count()
+
+    # Retrieve pretrained weights
+    if len(args.pretrained)==0:
+        pretrained_weights_filename=pretrained_weight_url.copy()
+        for one_key,one_value in pretrained_weights_filename.items():
+            pretrained_weights_filename[one_key]=str(one_value).split(sep='/')[-1]
+
+        path_to_pretrained_weights=os.path.join('pretrained',pretrained_weights_filename[args.arch])
+        if not os.path.exists('pretrained'):
+            os.mkdir('pretrained')
+            download_preweights(pretrained_weight_url,path_to_pretrained_weights,args.arch)
+        else:
+            if not os.path.exists(path_to_pretrained_weights): # Download dict file if not exists
+                download_preweights(pretrained_weight_url,path_to_pretrained_weights,args.arch)
+        args.pretrained=path_to_pretrained_weights
+
     if args.multiprocessing_distributed:
         # Since we have ngpus_per_node processes per node, the total world_size
         # needs to be adjusted accordingly
@@ -194,16 +221,16 @@ def main_worker(gpu, ngpus_per_node, args):
                                 world_size=args.world_size, rank=args.rank)
         torch.distributed.barrier()
 
-    if args.negative_mode=='L':
-        print("Negative mode: L=L0+L1")
-    elif args.negative_mode=='L0':
-        print("Negative mode: L0")
-    elif args.negative_mode=='L1':
-        print("Negative mode: L1")
-    elif len(args.negative_mode)==0:
-        print("Negative mode: test")
+    if args.loss_mode=='L':
+        print("Loss mode: L=L0+L1")
+    elif args.loss_mode=='L0':
+        print("Loss mode: L0")
+    elif args.loss_mode=='L1':
+        print("Loss mode: L1")
+    elif len(args.loss_mode)==0:
+        print("Loss mode: test")
     else:
-        raise ValueError("Unknown negative mode: ", args.negative_mode)
+        raise ValueError("Unknown loss mode: ", args.loss_mode)
 
     if args.output_dir=='.':
         print("Checkpoints will be written to current folder.")
@@ -213,10 +240,10 @@ def main_worker(gpu, ngpus_per_node, args):
     # This is valid for only resnet models
     if args.output_stride==8:
         replace_stride_with_dilation=[False, True, True]
-        aspp_dilate = [12, 24, 36]
+        # aspp_dilate = [12, 24, 36]
     else:
         replace_stride_with_dilation=[False, False, True]
-        aspp_dilate = [6, 12, 18]
+        # aspp_dilate = [6, 12, 18]
     # create model
     print("=> creating model '{}'".format(args.arch))
     if args.arch.startswith('vit'):
@@ -226,7 +253,8 @@ def main_worker(gpu, ngpus_per_node, args):
     else:
         model = moco.builder.MoCo_ResNet(
             partial(torchvision_models.__dict__[args.arch], zero_init_residual=True,replace_stride_with_dilation=replace_stride_with_dilation), 
-            args.moco_dim, args.moco_mlp_dim, args.moco_t, args.negative_mode)
+            args.moco_dim, args.moco_mlp_dim, args.moco_t, args.loss_mode)
+        model=load_backbone(model,args=args)
 
     # infer learning rate before changing batch size
     args.lr = args.lr * args.batch_size / 256
@@ -275,7 +303,17 @@ def main_worker(gpu, ngpus_per_node, args):
                                 weight_decay=args.weight_decay)
         
     scaler = torch.cuda.amp.GradScaler()
-    summary_writer = SummaryWriter() if args.rank == 0 else None
+
+    list_datasets=args.choose_dataset
+    dataset_str=""
+    for i,dataset in enumerate(list_datasets):
+        if i==len(list_datasets)-1:
+            dataset_str=dataset_str+dataset
+        else:
+            dataset_str=dataset_str+dataset+"N"
+    
+    summary_writer_str=('%s_%s_%s_batchsize%04d' % (dataset_str,args.arch,args.loss_mode,total_batch_size))
+    summary_writer = SummaryWriter(comment=summary_writer_str,filename_suffix=summary_writer_str) if args.rank == 0 else None
 
     # optionally resume from a checkpoint
     if args.resume:
@@ -340,13 +378,6 @@ def main_worker(gpu, ngpus_per_node, args):
         transforms.ToTensor(),
         normalize
     ]
-    # TODO: load my own dataset
-    # train_dataset = datasets.ImageFolder(
-    #     traindir,
-    #     moco.loader.TwoCropsTransform(transforms.Compose(augmentation1), 
-    #                                   transforms.Compose(augmentation2)))
-
-    list_datasets=args.choose_dataset
 
     train_dataset=CustomImageDataset(traindir,
                                     transform= moco.loader.TwoCropsTransformWithItself(
@@ -372,37 +403,29 @@ def main_worker(gpu, ngpus_per_node, args):
 
         # train for one epoch
         train(train_loader, model, optimizer, scaler, summary_writer, epoch, args)
-
-        dataset_str=""
-        for i,dataset in enumerate(list_datasets):
-            if i==len(list_datasets)-1:
-                dataset_str=dataset_str+dataset
-            else:
-                dataset_str=dataset_str+dataset+"N"
         
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                 and args.rank == 0): # only the first GPU saves checkpoint
-                # TODO: save state only when epoch is divisible by five
+            ckpt_filename=('ckpt/%s/%s/%s/batchsize%04d/%s_%s_%s_batchsize%04d_epoch%04d.pth.tar' % (
+            dataset_str,args.arch,args.loss_mode, total_batch_size, 
+            dataset_str,args.arch,args.loss_mode,total_batch_size,epoch))
             save_checkpoint({
                 'epoch': epoch + 1,
                 'arch': args.arch,
                 'state_dict': model.state_dict(),
                 'optimizer' : optimizer.state_dict(),
                 'scaler': scaler.state_dict(),
-            }, is_best=False, filename=os.path.join(args.output_dir,
-                                                    ('ckpt/%s/%s/%s/batchsize%04d/checkpoint_%s_%s_%s_batchsize%04d_epoch%04d.pth.tar' % (dataset_str,args.arch,args.negative_mode, total_batch_size,
-                                                     dataset_str,args.arch,args.negative_mode,total_batch_size,epoch))
-                                                    )
+            }, is_best=False, filename=os.path.join(args.output_dir, ckpt_filename)
             )
-            print("Save checkpoint to ",('ckpt/%s/%s/%s/batchsize%04d/checkpoint_%s_%s_%s_batchsize%04d_epoch%04d.pth.tar' % (dataset_str,args.arch,args.negative_mode, total_batch_size, dataset_str,args.arch,args.negative_mode,total_batch_size,epoch)))
+            print("Save checkpoint to ",ckpt_filename)
             
             previous_filename=os.path.join(args.output_dir,
-                                                    ('ckpt/%s/%s/%s/batchsize%04d/checkpoint_%s_%s_%s_batchsize%04d_epoch%04d.pth.tar' % (dataset_str,args.arch,args.negative_mode, total_batch_size,
-                                                     dataset_str,args.arch,args.negative_mode,total_batch_size,epoch-1))
-                                                    )
+                                            ('ckpt/%s/%s/%s/batchsize%04d/%s_%s_%s_batchsize%04d_epoch%04d.pth.tar' % (dataset_str,args.arch,args.loss_mode, total_batch_size,
+                                            dataset_str,args.arch,args.loss_mode,total_batch_size,epoch-1))
+                                            )
             if os.path.exists(previous_filename):
-                with os.remove(previous_filename):
-                    print("Remove previous checkpoint: ",previous_filename)
+                os.remove(previous_filename)
+                print("Remove previous checkpoint: ",previous_filename)
 
     if args.rank == 0:
         summary_writer.close()
@@ -526,6 +549,29 @@ def adjust_moco_momentum(epoch, args):
     m = 1. - 0.5 * (1. + math.cos(math.pi * epoch / args.epochs)) * (1. - args.moco_m)
     return m
 
+def load_backbone(backbone:nn.Module,args):
+    #load state_dict
+    checkpoint = torch.load(args.pretrained, map_location="cpu")
+    # rename moco pre-trained keys
+    state_dict = checkpoint['state_dict']
+    for k in list(state_dict.keys()):
+        # retain only base_encoder up to before the embedding layer
+        if k.startswith('module.'):# and not k.startswith('module.base_encoder.%s' % linear_keyword)
+            # remove prefix
+            state_dict[k[len("module."):]] = state_dict[k]
+        # delete renamed or unused k
+        del state_dict[k]
+    args.start_epoch = 0
+    backbone.load_state_dict(state_dict)#, strict=False
+    # assert set(msg.missing_keys) == {"%s.weight" % linear_keyword, "%s.bias" % linear_keyword}
+    return backbone
+
+def download_preweights(list_url, download_path, key):
+    print("Download pretrained weights for %s backbone from '%s'." % (key,list_url[key]))
+    down_res=requests.get(list_url[key])
+    with open(download_path,'wb') as file:
+        file.write(down_res.content)
+    print("Download pretrained weights for %s backbone is saved to '%s'." % (key,download_path))
 
 if __name__ == '__main__':
     main()
