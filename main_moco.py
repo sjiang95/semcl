@@ -112,7 +112,7 @@ parser.add_argument('--stop-grad-conv1', action='store_true',
                     help='stop-grad after first conv, or patch embedding')
 
 # other upgrades
-parser.add_argument('--optimizer', default='lars', type=str,
+parser.add_argument('--optimizer', default='adamw', type=str,
                     choices=['lars', 'adamw'],
                     help='optimizer used (default: lars)')
 parser.add_argument('--warmup-epochs', default=10, type=int, metavar='N',
@@ -125,13 +125,17 @@ parser.add_argument('--choose-dataset', default=['coco', 'ade'], nargs='+',
                     help='arbitrary combine coco, ade20k and voc2012 datasets')
 
 # choose negative mode
-parser.add_argument('--negative-mode', default='paired', type=str,
-                    choices=['paired', 'unpaired'],
+parser.add_argument('--negative-mode', default='L', type=str,
+                    choices=['L', 'L0','L1'],
                     help='Determines how the (optional) negative_keys are handled. Value must be one of ["paired", "unpaired"].')
 
 # choose negative mode
 parser.add_argument('--output-dir', default='.', type=str,
                     help='Output path. Default is current path.')
+
+# deeplab
+parser.add_argument("--output_stride", type=int, default=16, choices=[8, 16],
+                    help="This option is valid for only resnet backbones.")
 
 def main():
     args = parser.parse_args()
@@ -190,10 +194,14 @@ def main_worker(gpu, ngpus_per_node, args):
                                 world_size=args.world_size, rank=args.rank)
         torch.distributed.barrier()
 
-    if args.negative_mode=='paired':
-        print("Negative mode: paired")
-    elif args.negative_mode=='unpaired':
-        print("Negative mode: unpaired")
+    if args.negative_mode=='L':
+        print("Negative mode: L=L0+L1")
+    elif args.negative_mode=='L0':
+        print("Negative mode: L0")
+    elif args.negative_mode=='L1':
+        print("Negative mode: L1")
+    elif len(args.negative_mode)==0:
+        print("Negative mode: test")
     else:
         raise ValueError("Unknown negative mode: ", args.negative_mode)
 
@@ -202,6 +210,13 @@ def main_worker(gpu, ngpus_per_node, args):
     else:
         print("Checkpoints will be written to %s." % (args.output_dir))
 
+    # This is valid for only resnet models
+    if args.output_stride==8:
+        replace_stride_with_dilation=[False, True, True]
+        aspp_dilate = [12, 24, 36]
+    else:
+        replace_stride_with_dilation=[False, False, True]
+        aspp_dilate = [6, 12, 18]
     # create model
     print("=> creating model '{}'".format(args.arch))
     if args.arch.startswith('vit'):
@@ -210,7 +225,7 @@ def main_worker(gpu, ngpus_per_node, args):
             args.moco_dim, args.moco_mlp_dim, args.moco_t)
     else:
         model = moco.builder.MoCo_ResNet(
-            partial(torchvision_models.__dict__[args.arch], zero_init_residual=True), 
+            partial(torchvision_models.__dict__[args.arch], zero_init_residual=True,replace_stride_with_dilation=replace_stride_with_dilation), 
             args.moco_dim, args.moco_mlp_dim, args.moco_t, args.negative_mode)
 
     # infer learning rate before changing batch size

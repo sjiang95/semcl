@@ -14,7 +14,7 @@ class MoCo(nn.Module):
     Build a MoCo model with a base encoder, a momentum encoder, and two MLPs
     https://arxiv.org/abs/1911.05722
     """
-    def __init__(self, base_encoder, dim=256, mlp_dim=4096, T=1.0,negative_mode='paired'):
+    def __init__(self, base_encoder, dim=256, mlp_dim=4096, T=1.0,negative_mode='L'):
         """
         dim: feature dimension (default: 256)
         mlp_dim: hidden dimension in MLPs (default: 4096)
@@ -112,25 +112,28 @@ class MoCo(nn.Module):
             k_neg2 = self.momentum_encoder(torch.squeeze(x2[:,2]))
 
         # TODO: use all other samples in the same batch as negative samples if current method performs bad
-        if self.infonce.negative_mode=='paired':
-            pos_keys_stack=torch.stack([k_pos0,k_pos1,k_pos2],dim=1)
-            neg_keys_stack=torch.stack([k_neg0,k_neg1,k_neg2],dim=1)
+        pos_keys_stack=torch.stack([k_pos0,k_pos1,k_pos2],dim=1)
+        neg_keys_stack=torch.stack([k_neg0,k_neg1,k_neg2],dim=1)
 
-            loss0=(self.infonce(q_01,k_pos2,negative_keys=neg_keys_stack)
+        loss0=(self.infonce(q_01,k_pos2,negative_keys=neg_keys_stack)
                 +self.infonce(q_02,k_pos1,negative_keys=neg_keys_stack)
                 +self.infonce(q_11,k_neg2,negative_keys=pos_keys_stack)
                 +self.infonce(q_12,k_neg1,negative_keys=pos_keys_stack)
             )
-            loss0=loss0/float(4.0)
+        loss0=loss0/float(4.0)
 
-            loss1=(self.contrastive_loss(q_01,k_pos2)
+        loss1=(self.contrastive_loss(q_01,k_pos2)
                     +self.contrastive_loss(q_02,k_pos1)
                     +self.contrastive_loss(q_11,k_neg2)
                     +self.contrastive_loss(q_12,k_neg1)
                     )/float(4.0)
-            
+        if self.infonce.negative_mode=='L':            
             return loss0+loss1#
-        elif self.infonce.negative_mode=='unpaired':
+        elif self.infonce.negative_mode=='L0':
+            return loss0
+        elif self.infonce.negative_mode=='L1':
+            return loss1
+        else:
             # k_neg=torch.cat([k_neg0,k_neg1,k_neg2],dim=0)
             # loss=self.infonce(q_01,k_pos2,negative_keys=k_neg)+self.infonce(q_02,k_pos1,negative_keys=k_neg)
             q_x1=torch.cat((q_01,q_11),dim=0)
