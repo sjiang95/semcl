@@ -164,6 +164,12 @@ def main():
     if args.gpu is not None:
         warnings.warn('You have chosen a specific GPU. This will completely disable data parallelism.')
 
+    if args.warmup_epochs is None:
+        args.warmup_epochs=args.epochs//8
+        print("warmup_epochs is not given. Set it to ", args.warmup_epochs)
+    else:
+        print("User specified warmup_epochs=",args.warmup_epochs)
+
     if args.dist_url == "env://" and args.world_size == -1:
         args.world_size = int(os.environ["WORLD_SIZE"])
 
@@ -535,8 +541,6 @@ class ProgressMeter(object):
 
 def adjust_learning_rate(optimizer, epoch, args):
     """Decays the learning rate with half-cycle cosine after warmup"""
-    if args.warmup_epochs is None:
-        args.warmup_epochs=epoch//8
     if epoch < args.warmup_epochs:
         lr = args.lr * epoch / args.warmup_epochs 
     else:
