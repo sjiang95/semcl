@@ -14,7 +14,7 @@ class MoCo(nn.Module):
     Build a MoCo model with a base encoder, a momentum encoder, and two MLPs
     https://arxiv.org/abs/1911.05722
     """
-    def __init__(self, base_encoder, dim=256, mlp_dim=4096, T=1.0,loss_mode='L'):
+    def __init__(self, base_encoder, dim=256, mlp_dim=4096, T=1.0,loss_mode=None):
         """
         dim: feature dimension (default: 256)
         mlp_dim: hidden dimension in MLPs (default: 4096)
@@ -122,16 +122,17 @@ class MoCo(nn.Module):
                     +self.infonce(q_11,k_neg2,negative_keys=pos_keys_stack)
                     +self.infonce(q_12,k_neg1,negative_keys=pos_keys_stack)
                 )
-            loss0=loss0/float(4.0)
+            # loss0/=float(4.0)
 
         if self.loss_mode=='L1' or self.loss_mode=='L':
             loss1=(self.contrastive_loss(q_01,k_pos2)
-                        +self.contrastive_loss(q_02,k_pos1)
-                        +self.contrastive_loss(q_11,k_neg2)
-                        +self.contrastive_loss(q_12,k_neg1)
-                        )/float(4.0)
+                    +self.contrastive_loss(q_02,k_pos1)
+                    +self.contrastive_loss(q_11,k_neg2)
+                    +self.contrastive_loss(q_12,k_neg1)
+                    )
+            # loss1/=float(4.0)
         if self.loss_mode=='L':            
-            return loss0+loss1#
+            return loss0+loss1
         elif self.loss_mode=='L0':
             return loss0
         elif self.loss_mode=='L1':
