@@ -126,7 +126,7 @@ parser.add_argument('--stop-grad-conv1', action='store_true',
 parser.add_argument('--optimizer', default='adamw', type=str,
                     choices=['lars', 'adamw'],
                     help='optimizer used (default: lars)')
-parser.add_argument('--warmup-epochs', default=10, type=int, metavar='N',
+parser.add_argument('--warmup-epochs', default=None, type=int, metavar='N',
                     help='number of warmup epochs')
 parser.add_argument('--crop-min', default=0.08, type=float,
                     help='minimum scale for random cropping (default: 0.08)')
@@ -136,7 +136,7 @@ parser.add_argument('--choose-dataset', default=['coco', 'ade'], nargs='+',
                     help='arbitrary combine coco, ade20k and voc2012 datasets')
 
 # choose negative mode
-parser.add_argument('--loss-mode', default='L', type=str,
+parser.add_argument('--loss-mode', default='', type=str,
                     choices=['L', 'L0','L1'],
                     help='Determines how the (optional) negative_keys are handled. Value must be one of ["paired", "unpaired"].')
 
@@ -208,7 +208,7 @@ def main_worker(gpu, ngpus_per_node, args):
         builtins.print = print_pass
 
     if args.gpu is not None:
-        print("Use GPU: {} for training".format(args.gpu))
+        print("Use GPU: {} for printing".format(args.gpu))
 
     if args.distributed:
         if args.dist_url == "env://" and args.rank == -1:
@@ -417,7 +417,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 'scaler': scaler.state_dict(),
             }, is_best=False, filename=os.path.join(args.output_dir, ckpt_filename)
             )
-            print("Save checkpoint to ",ckpt_filename)
+            print("Save checkpoint to ",os.path.abspath(ckpt_filename))
             
             previous_filename=os.path.join(args.output_dir,
                                             ('ckpt/%s/%s/%s/batchsize%04d/%s_%s_%s_batchsize%04d_epoch%04d.pth.tar' % (dataset_str,args.arch,args.loss_mode, total_batch_size,
@@ -535,6 +535,8 @@ class ProgressMeter(object):
 
 def adjust_learning_rate(optimizer, epoch, args):
     """Decays the learning rate with half-cycle cosine after warmup"""
+    if args.warmup_epochs is None:
+        args.warmup_epochs=epoch//8
     if epoch < args.warmup_epochs:
         lr = args.lr * epoch / args.warmup_epochs 
     else:
