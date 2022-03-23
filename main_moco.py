@@ -166,7 +166,7 @@ def main():
 
     if args.warmup_epochs is None:
         args.warmup_epochs=args.epochs//8
-        print("warmup_epochs is not given. Set it to ", args.warmup_epochs)
+        print("warmup_epochs is not given. Set it to", args.warmup_epochs)
     else:
         print("User specified warmup_epochs=",args.warmup_epochs)
 
