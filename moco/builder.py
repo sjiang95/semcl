@@ -84,67 +84,60 @@ class MoCo(nn.Module):
     def forward(self, x1, x2, m):
         """
         Input:
-            x1: first views of images
-            x2: second views of images
+            x1: anchor images
+            x2: ~anchor images
             m: moco momentum
         Output:
             loss
         """
         loss=None
         # compute features
-        # q_0 = self.predictor(self.base_encoder(torch.squeeze(x1[:,0])))
-        q_01 = self.predictor(self.base_encoder(torch.squeeze(x1[:,1])))
-        q_02 = self.predictor(self.base_encoder(torch.squeeze(x1[:,2])))
+        q_anchor0 = self.predictor(self.base_encoder(torch.squeeze(x1[:,0])))
+        q_anchor1 = self.predictor(self.base_encoder(torch.squeeze(x1[:,1])))
+        q_anchor2 = self.predictor(self.base_encoder(torch.squeeze(x1[:,2])))
 
-        # q_10 = self.predictor(self.base_encoder(torch.squeeze(x2[:,0])))
-        q_11 = self.predictor(self.base_encoder(torch.squeeze(x2[:,1])))
-        q_12 = self.predictor(self.base_encoder(torch.squeeze(x2[:,2])))
+        q_nanchor0 = self.predictor(self.base_encoder(torch.squeeze(x2[:,0])))
+        q_nanchor1 = self.predictor(self.base_encoder(torch.squeeze(x2[:,1])))
+        q_nanchor2 = self.predictor(self.base_encoder(torch.squeeze(x2[:,2])))
 
         with torch.no_grad():  # no gradient
             self._update_momentum_encoder(m)  # update the momentum encoder
 
             # compute momentum features as targets
-            k_pos0 = self.momentum_encoder(torch.squeeze(x1[:,0]))
-            k_pos1 = self.momentum_encoder(torch.squeeze(x1[:,1]))
-            k_pos2 = self.momentum_encoder(torch.squeeze(x1[:,2]))
+            k_anchor0 = self.momentum_encoder(torch.squeeze(x1[:,0]))
+            k_anchor1 = self.momentum_encoder(torch.squeeze(x1[:,1]))
+            k_anchor2 = self.momentum_encoder(torch.squeeze(x1[:,2]))
 
-            k_neg0 = self.momentum_encoder(torch.squeeze(x2[:,0]))
-            k_neg1 = self.momentum_encoder(torch.squeeze(x2[:,1]))
-            k_neg2 = self.momentum_encoder(torch.squeeze(x2[:,2]))
+            k_nanchor0 = self.momentum_encoder(torch.squeeze(x2[:,0]))
+            k_nanchor1 = self.momentum_encoder(torch.squeeze(x2[:,1]))
+            k_nanchor2 = self.momentum_encoder(torch.squeeze(x2[:,2]))
 
         # TODO: use all other samples in the same batch as negative samples if current method performs bad
-        pos_keys_stack=torch.stack([k_pos0,k_pos1,k_pos2],dim=1)
-        neg_keys_stack=torch.stack([k_neg0,k_neg1,k_neg2],dim=1)
+        pos_keys_stack=torch.stack([k_anchor0,k_anchor1,k_anchor2],dim=1)
+        neg_keys_stack=torch.stack([k_nanchor0,k_nanchor1,k_nanchor2],dim=1)
 
         if self.loss_mode=='L0' or self.loss_mode=='L':
-            loss0=(self.infonce(q_01,k_pos2,negative_keys=neg_keys_stack)
-                    +self.infonce(q_02,k_pos1,negative_keys=neg_keys_stack)
-                    +self.infonce(q_11,k_neg2,negative_keys=pos_keys_stack)
-                    +self.infonce(q_12,k_neg1,negative_keys=pos_keys_stack)
+            loss0=(self.infonce(q_anchor0,k_anchor1,negative_keys=neg_keys_stack)
+                    +self.infonce(q_anchor1,k_anchor2,negative_keys=neg_keys_stack)
+                    +self.infonce(q_anchor2,k_anchor0,negative_keys=neg_keys_stack)
+                    +self.infonce(q_nanchor0,k_nanchor1,negative_keys=pos_keys_stack)
+                    +self.infonce(q_nanchor1,k_nanchor2,negative_keys=pos_keys_stack)
+                    +self.infonce(q_nanchor2,k_nanchor0,negative_keys=pos_keys_stack)
                 )
             # loss0/=float(4.0)
 
-        if self.loss_mode=='L1' or self.loss_mode=='L':
-            loss1=(self.contrastive_loss(q_01,k_pos2)
-                    +self.contrastive_loss(q_02,k_pos1)
-                    +self.contrastive_loss(q_11,k_neg2)
-                    +self.contrastive_loss(q_12,k_neg1)
-                    )
+        if self.loss_mode=='mocov3' or self.loss_mode=='L':
+            loss_view0=self.contrastive_loss(q_anchor0,k_anchor1)+self.contrastive_loss(q_nanchor0,k_nanchor1)
+            loss_view1=self.contrastive_loss(q_anchor1,k_anchor2)+self.contrastive_loss(q_nanchor1,k_nanchor2)
+            loss_view2=self.contrastive_loss(q_anchor2,k_anchor0)+self.contrastive_loss(q_nanchor2,k_nanchor0)
+            loss_mocov3=loss_view0+loss_view1+loss_view2
             # loss1/=float(4.0)
-        if self.loss_mode=='L':            
-            return loss0+loss1
+        if self.loss_mode=='L':
+            return loss0+loss_mocov3
         elif self.loss_mode=='L0':
             return loss0
-        elif self.loss_mode=='L1':
-            return loss1
-        else:
-            # k_neg=torch.cat([k_neg0,k_neg1,k_neg2],dim=0)
-            # loss=self.infonce(q_01,k_pos2,negative_keys=k_neg)+self.infonce(q_02,k_pos1,negative_keys=k_neg)
-            q_x1=torch.cat((q_01,q_11),dim=0)
-            q_x2=torch.cat((q_02,q_12),dim=0)
-            k_x1=torch.cat((k_pos1,k_neg1),dim=0)
-            k_x2=torch.cat((k_pos2,k_neg2),dim=0)
-            return self.contrastive_loss(q_x1,k_x2)+self.contrastive_loss(q_x2,k_x1)
+        elif self.loss_mode=='mocov3':
+            return loss_mocov3
 
 class MoCo_ResNet(MoCo):
     def _build_projector_and_predictor_mlps(self, dim, mlp_dim):
