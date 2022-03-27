@@ -40,6 +40,7 @@ import moco.optimizer
 import vits
 
 from load_custom_data import CustomImageDataset
+from utils import ext_transforms as et
 
 
 torchvision_model_names = sorted(name for name in torchvision_models.__dict__
@@ -137,7 +138,7 @@ parser.add_argument('--choose-dataset', default=['coco', 'ade'], nargs='+',
 
 # choose negative mode
 parser.add_argument('--loss-mode', default='', type=str,
-                    choices=['L', 'L0','L1'],
+                    choices=['L', 'L0', 'mocov3'],
                     help='Determines how the (optional) negative_keys are handled. Value must be one of ["paired", "unpaired"].')
 
 # set checkpoints output dir
@@ -228,13 +229,14 @@ def main_worker(gpu, ngpus_per_node, args):
         torch.distributed.barrier()
 
     if args.loss_mode=='L':
-        print("Loss mode: L=L0+L1")
+        print("Loss mode: L=L0+loss_mocov3")
     elif args.loss_mode=='L0':
         print("Loss mode: L0")
-    elif args.loss_mode=='L1':
-        print("Loss mode: L1")
+    elif args.loss_mode=='mocov3':
+        print("Loss mode: mocov3")
     elif len(args.loss_mode)==0:
         print("Loss mode: test")
+        args.loss_mode='test'
     else:
         raise ValueError("Unknown loss mode: ", args.loss_mode)
 
@@ -344,52 +346,52 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # Data loading code
     traindir = args.data
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+    normalize = et.ExtNormalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
 
     # directly resize original image for complete semantic information
     augmentation0=[
-        transforms.Resize((224,224)),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
+        et.ExtResize((224,224)),
+        et.ExtRandomHorizontalFlip(),
+        et.ExtToTensor(),
         normalize
     ]
 
     # follow BYOL's augmentation recipe: https://arxiv.org/abs/2006.07733
     augmentation1 = [
-        transforms.Resize(224),
-        transforms.RandomCrop(224),
-        # transforms.RandomResizedCrop(224, scale=(args.crop_min, 1.)),
-        transforms.RandomApply([
+        et.ExtResize(224),
+        et.ExtRandomCrop(224),
+        # et.ExtRandomResizedCrop(224, scale=(args.crop_min, 1.)),
+        et.ExtRandomApply([
             transforms.ColorJitter(0.4, 0.4, 0.2, 0.1)  # not strengthened
         ], p=0.8),
-        transforms.RandomGrayscale(p=0.2),
-        transforms.RandomApply([moco.loader.GaussianBlur([.1, 2.])], p=1.0),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
+        et.ExtRandomGrayscale(p=0.2),
+        et.ExtRandomApply([moco.loader.GaussianBlur([.1, 2.])], p=1.0),
+        et.ExtRandomHorizontalFlip(),
+        et.ExtToTensor(),
         normalize
     ]
 
     augmentation2 = [
-        transforms.Resize(224),
-        transforms.RandomCrop(224),
-        # transforms.RandomResizedCrop(224, scale=(args.crop_min, 1.)),
-        transforms.RandomApply([
+        et.ExtResize(224),
+        et.ExtRandomCrop(224),
+        # et.ExtRandomResizedCrop(224, scale=(args.crop_min, 1.)),
+        et.ExtRandomApply([
             transforms.ColorJitter(0.4, 0.4, 0.2, 0.1)  # not strengthened
         ], p=0.8),
-        transforms.RandomGrayscale(p=0.2),
-        transforms.RandomApply([moco.loader.GaussianBlur([.1, 2.])], p=0.1),
-        transforms.RandomApply([moco.loader.Solarize()], p=0.2),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
+        et.ExtRandomGrayscale(p=0.2),
+        et.ExtRandomApply([moco.loader.GaussianBlur([.1, 2.])], p=0.1),
+        et.ExtRandomApply([moco.loader.Solarize()], p=0.2),
+        et.ExtRandomHorizontalFlip(),
+        et.ExtToTensor(),
         normalize
     ]
 
     train_dataset=CustomImageDataset(traindir,
                                     transform= moco.loader.TwoCropsTransformWithItself(
-                                    transforms.Compose(augmentation0),
-                                    transforms.Compose(augmentation1),
-                                    transforms.Compose(augmentation2)),
+                                    et.ExtCompose(augmentation0),
+                                    et.ExtCompose(augmentation1),
+                                    et.ExtCompose(augmentation2)),
                                     datasets= list_datasets
                                     )
 
@@ -412,7 +414,7 @@ def main_worker(gpu, ngpus_per_node, args):
         
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                 and args.rank == 0): # only the first GPU saves checkpoint
-            ckpt_filename=('ckpt/%s/%s/%s/batchsize%04d/%s_%s_%s_batchsize%04d_epoch%04d.pth.tar' % (
+            ckpt_filename=('ckpt/%s/%s/%s/batchsize%04d/%s_%s_%s_ecdbatchsize%04d_epoch%04d.pth.tar' % (
             dataset_str,args.arch,args.loss_mode, total_batch_size, 
             dataset_str,args.arch,args.loss_mode,total_batch_size,epoch))
             save_checkpoint({
@@ -426,7 +428,7 @@ def main_worker(gpu, ngpus_per_node, args):
             print("Save checkpoint to ",os.path.abspath(ckpt_filename))
             
             previous_filename=os.path.join(args.output_dir,
-                                            ('ckpt/%s/%s/%s/batchsize%04d/%s_%s_%s_batchsize%04d_epoch%04d.pth.tar' % (dataset_str,args.arch,args.loss_mode, total_batch_size,
+                                            ('ckpt/%s/%s/%s/batchsize%04d/%s_%s_%s_ecdbatchsize%04d_epoch%04d.pth.tar' % (dataset_str,args.arch,args.loss_mode, total_batch_size,
                                             dataset_str,args.arch,args.loss_mode,total_batch_size,epoch-1))
                                             )
             if os.path.exists(previous_filename):

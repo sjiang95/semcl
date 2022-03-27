@@ -23,6 +23,10 @@ class CustomImageDataset(Dataset):
                 ADEImgListCSV=pd.read_csv(os.path.join(img_dir,"ADE_ImgList.csv"))
                 self.img_df=pd.concat([self.img_df,ADEImgListCSV],ignore_index=True)
                 print("ADE20K added")
+            elif OneDataset=='city':
+                CityImgListCSV=pd.read_csv(os.path.join(img_dir,"Cityscapes_ImgList.csv"))
+                self.img_df=pd.concat([self.img_df,CityImgListCSV],ignore_index=True)
+                print("Cityscapes added")
             else:
                 raise ValueError("Unrecognize dataset choice.")
         
@@ -42,8 +46,8 @@ class CustomImageDataset(Dataset):
         nanchor_image = Image.open(nanchor_img_path)
         # label = self.img_df.iloc[idx, 1]
         if self.transform:
-            anchor_image_trans = self.transform(anchor_image)
-            nanchor_image_trans = self.transform(nanchor_image)
+            anchor_image_trans, nanchor_image_trans = self.transform(anchor_image, nanchor_image)
+            # nanchor_image_trans = self.transform(nanchor_image)
         # if self.target_transform:
         #     label = self.target_transform(label)
         return anchor_image_trans, nanchor_image_trans

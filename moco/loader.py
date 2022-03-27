@@ -31,11 +31,11 @@ class TwoCropsTransformWithItself:
         self.base_transform1 = base_transform1
         self.base_transform2 = base_transform2
 
-    def __call__(self, x):
-        im0 = self.base_transform0(x)
-        im1 = self.base_transform1(x)
-        im2 = self.base_transform2(x)
-        return torch.stack([im0, im1, im2])
+    def __call__(self, x0, x1):
+        im0_0, im0_1 = self.base_transform0(x0, x1)
+        im1_0, im1_1 = self.base_transform1(x0, x1)
+        im2_0, im2_1 = self.base_transform2(x0, x1)
+        return torch.stack([im0_0, im1_0, im2_0]), torch.stack([im0_1, im1_1, im2_1])
 
 class GaussianBlur(object):
     """Gaussian blur augmentation from SimCLR: https://arxiv.org/abs/2002.05709"""
