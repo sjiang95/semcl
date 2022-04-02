@@ -13,6 +13,7 @@ import os
 import random
 import shutil
 import time
+from datetime import datetime, timedelta
 import warnings
 from functools import partial
 import multiprocessing
@@ -150,6 +151,8 @@ parser.add_argument("--output_stride", type=int, default=16, choices=[8, 16],
                     help="This option is valid for only resnet backbones.")
 
 def main():
+    start_time=datetime.now()
+    print("{}: Training started.".format(start_time))
     args = parser.parse_args()
 
     if args.seed is not None:
@@ -203,6 +206,11 @@ def main():
     else:
         # Simply call main_worker function
         main_worker(args.gpu, ngpus_per_node, args)
+
+    end_time=datetime.now()
+    print("{}: Training finished.".format(start_time))
+    train_time_consume=end_time-start_time
+    print("This training process takes ",str(train_time_consume))
 
 
 def main_worker(gpu, ngpus_per_node, args):
@@ -351,7 +359,8 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # directly resize original image for complete semantic information
     augmentation0=[
-        et.ExtResize((224,224)),
+        et.ExtResize(224),
+        et.ExtRandomCrop(224),
         et.ExtRandomHorizontalFlip(),
         et.ExtToTensor(),
         normalize
@@ -359,9 +368,9 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # follow BYOL's augmentation recipe: https://arxiv.org/abs/2006.07733
     augmentation1 = [
-        et.ExtResize(224),
-        et.ExtRandomCrop(224),
-        # et.ExtRandomResizedCrop(224, scale=(args.crop_min, 1.)),
+        # et.ExtResize(224),
+        # et.ExtRandomCrop(224),
+        et.ExtRandomResizedCrop(224, scale=(args.crop_min, 1.)),
         et.ExtRandomApply([
             transforms.ColorJitter(0.4, 0.4, 0.2, 0.1)  # not strengthened
         ], p=0.8),
@@ -373,9 +382,9 @@ def main_worker(gpu, ngpus_per_node, args):
     ]
 
     augmentation2 = [
-        et.ExtResize(224),
-        et.ExtRandomCrop(224),
-        # et.ExtRandomResizedCrop(224, scale=(args.crop_min, 1.)),
+        # et.ExtResize(224),
+        # et.ExtRandomCrop(224),
+        et.ExtRandomResizedCrop(224, scale=(args.crop_min, 1.)),
         et.ExtRandomApply([
             transforms.ColorJitter(0.4, 0.4, 0.2, 0.1)  # not strengthened
         ], p=0.8),
@@ -414,9 +423,9 @@ def main_worker(gpu, ngpus_per_node, args):
         
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                 and args.rank == 0): # only the first GPU saves checkpoint
-            ckpt_filename=('ckpt/%s/%s/%s/batchsize%04d/%s_%s_%s_ecdbatchsize%04d_epoch%04d.pth.tar' % (
+            ckpt_filename=('ckpt/%s/%s/%s/batchsize%04d/%s_%s_%s_ecdbatchsize%04d_epoch%04dof%04d.pth.tar' % (
             dataset_str,args.arch,args.loss_mode, total_batch_size, 
-            dataset_str,args.arch,args.loss_mode,total_batch_size,epoch))
+            dataset_str,args.arch,args.loss_mode,total_batch_size,epoch, args.epochs))
             save_checkpoint({
                 'epoch': epoch + 1,
                 'arch': args.arch,
@@ -428,8 +437,8 @@ def main_worker(gpu, ngpus_per_node, args):
             print("Save checkpoint to ",os.path.abspath(ckpt_filename))
             
             previous_filename=os.path.join(args.output_dir,
-                                            ('ckpt/%s/%s/%s/batchsize%04d/%s_%s_%s_ecdbatchsize%04d_epoch%04d.pth.tar' % (dataset_str,args.arch,args.loss_mode, total_batch_size,
-                                            dataset_str,args.arch,args.loss_mode,total_batch_size,epoch-1))
+                                            ('ckpt/%s/%s/%s/batchsize%04d/%s_%s_%s_ecdbatchsize%04d_epoch%04dof%04d.pth.tar' % (dataset_str,args.arch,args.loss_mode, total_batch_size,
+                                            dataset_str,args.arch,args.loss_mode,total_batch_size,epoch-1, args.epochs))
                                             )
             if os.path.exists(previous_filename):
                 os.remove(previous_filename)
