@@ -2,10 +2,18 @@ import collections
 import torchvision
 import torch
 import torchvision.transforms.functional as F
+from torchvision.transforms.functional import _interpolation_modes_from_int
 import random 
 import numbers
 import numpy as np
 from torchvision.transforms import InterpolationMode
+from collections.abc import Sequence
+import warnings
+from torch import Tensor
+from typing import Tuple, List, Optional
+import math
+from timm.data.transforms import _pil_interpolation_to_str
+
 
 #
 #  Extended Transforms for Semantic Segmentation
@@ -20,17 +28,17 @@ class ExtRandomHorizontalFlip(object):
     def __init__(self, p=0.5):
         self.p = p
 
-    def __call__(self, img, lbl):
+    def __call__(self, anchor, nanchor):
         """
         Args:
-            img (PIL Image): Image to be flipped.
+            anchor (PIL Image): Image to be flipped.
 
         Returns:
             PIL Image: Randomly flipped image.
         """
         if random.random() < self.p:
-            return F.hflip(img), F.hflip(lbl)
-        return img, lbl
+            return F.hflip(anchor), F.hflip(nanchor)
+        return anchor, nanchor
 
     def __repr__(self):
         return self.__class__.__name__ + '(p={})'.format(self.p)
@@ -51,10 +59,10 @@ class ExtCompose(object):
     def __init__(self, transforms):
         self.transforms = transforms
 
-    def __call__(self, img, lbl):
+    def __call__(self, anchor, nanchor):
         for t in self.transforms:
-            img, lbl = t(img, lbl)
-        return img, lbl
+            anchor, nanchor = t(anchor, nanchor)
+        return anchor, nanchor
 
     def __repr__(self):
         format_string = self.__class__.__name__ + '('
@@ -79,14 +87,14 @@ class ExtCenterCrop(object):
         else:
             self.size = size
 
-    def __call__(self, img, lbl):
+    def __call__(self, anchor, nanchor):
         """
         Args:
-            img (PIL Image): Image to be cropped.
+            anchor (PIL Image): Image to be cropped.
         Returns:
             PIL Image: Cropped image.
         """
-        return F.center_crop(img, self.size), F.center_crop(lbl, self.size)
+        return F.center_crop(anchor, self.size), F.center_crop(nanchor, self.size)
 
     def __repr__(self):
         return self.__class__.__name__ + '(size={0})'.format(self.size)
@@ -97,19 +105,19 @@ class ExtRandomScale(object):
         self.scale_range = scale_range
         self.interpolation = interpolation
 
-    def __call__(self, img, lbl):
+    def __call__(self, anchor, nanchor):
         """
         Args:
-            img (PIL Image): Image to be scaled.
-            lbl (PIL Image): Label to be scaled.
+            anchor (PIL Image): Image to be scaled.
+            nanchor (PIL Image): ~anchor to be scaled.
         Returns:
             PIL Image: Rescaled image.
             PIL Image: Rescaled label.
         """
-        assert img.size == lbl.size
+        assert anchor.size == nanchor.size
         scale = random.uniform(self.scale_range[0], self.scale_range[1])
-        target_size = ( int(img.size[1]*scale), int(img.size[0]*scale) )
-        return F.resize(img, target_size, self.interpolation), F.resize(lbl, target_size, InterpolationMode.NEAREST)
+        target_size = ( int(anchor.size[1]*scale), int(anchor.size[0]*scale) )
+        return F.resize(anchor, target_size, self.interpolation), F.resize(nanchor, target_size, self.interpolation)
 
     def __repr__(self):
         interpolate_str = _pil_interpolation_to_str[self.interpolation]
@@ -127,18 +135,18 @@ class ExtScale(object):
         self.scale = scale
         self.interpolation = interpolation
 
-    def __call__(self, img, lbl):
+    def __call__(self, anchor, nanchor):
         """
         Args:
-            img (PIL Image): Image to be scaled.
-            lbl (PIL Image): Label to be scaled.
+            anchor (PIL Image): Image to be scaled.
+            nanchor (PIL Image): ~anchor to be scaled.
         Returns:
             PIL Image: Rescaled image.
             PIL Image: Rescaled label.
         """
-        assert img.size == lbl.size
-        target_size = ( int(img.size[1]*self.scale), int(img.size[0]*self.scale) ) # (H, W)
-        return F.resize(img, target_size, self.interpolation), F.resize(lbl, target_size, InterpolationMode.NEAREST)
+        assert anchor.size == nanchor.size
+        target_size = ( int(anchor.size[1]*self.scale), int(anchor.size[0]*self.scale) ) # (H, W)
+        return F.resize(anchor, target_size, self.interpolation), F.resize(nanchor, target_size, self.interpolation)
 
     def __repr__(self):
         interpolate_str = _pil_interpolation_to_str[self.interpolation]
@@ -188,10 +196,10 @@ class ExtRandomRotation(object):
 
         return angle
 
-    def __call__(self, img, lbl):
+    def __call__(self, anchor, nanchor):
         """
-            img (PIL Image): Image to be rotated.
-            lbl (PIL Image): Label to be rotated.
+            anchor (PIL Image): Image to be rotated.
+            nanchor (PIL Image): ~anchor to be rotated.
         Returns:
             PIL Image: Rotated image.
             PIL Image: Rotated label.
@@ -199,7 +207,7 @@ class ExtRandomRotation(object):
 
         angle = self.get_params(self.degrees)
 
-        return F.rotate(img, angle, self.resample, self.expand, self.center), F.rotate(lbl, angle, self.resample, self.expand, self.center)
+        return F.rotate(anchor, angle, self.resample, self.expand, self.center), F.rotate(nanchor, angle, self.resample, self.expand, self.center)
 
     def __repr__(self):
         format_string = self.__class__.__name__ + '(degrees={0}'.format(self.degrees)
@@ -219,16 +227,16 @@ class ExtRandomHorizontalFlip(object):
     def __init__(self, p=0.5):
         self.p = p
 
-    def __call__(self, img, lbl):
+    def __call__(self, anchor, nanchor):
         """
         Args:
-            img (PIL Image): Image to be flipped.
+            anchor (PIL Image): Image to be flipped.
         Returns:
             PIL Image: Randomly flipped image.
         """
         if random.random() < self.p:
-            return F.hflip(img), F.hflip(lbl)
-        return img, lbl
+            return F.hflip(anchor), F.hflip(nanchor)
+        return anchor, nanchor
 
     def __repr__(self):
         return self.__class__.__name__ + '(p={})'.format(self.p)
@@ -243,18 +251,18 @@ class ExtRandomVerticalFlip(object):
     def __init__(self, p=0.5):
         self.p = p
 
-    def __call__(self, img, lbl):
+    def __call__(self, anchor, nanchor):
         """
         Args:
-            img (PIL Image): Image to be flipped.
-            lbl (PIL Image): Label to be flipped.
+            anchor (PIL Image): Image to be flipped.
+            nanchor (PIL Image): ~anchor to be flipped.
         Returns:
             PIL Image: Randomly flipped image.
             PIL Image: Randomly flipped label.
         """
         if random.random() < self.p:
-            return F.vflip(img), F.vflip(lbl)
-        return img, lbl
+            return F.vflip(anchor), F.vflip(nanchor)
+        return anchor, nanchor
 
     def __repr__(self):
         return self.__class__.__name__ + '(p={})'.format(self.p)
@@ -263,20 +271,20 @@ class ExtPad(object):
     def __init__(self, diviser=32):
         self.diviser = diviser
     
-    def __call__(self, img, lbl):
-        h, w = img.size
+    def __call__(self, anchor, nanchor):
+        h, w = anchor.size
         ph = (h//32+1)*32 - h if h%32!=0 else 0
         pw = (w//32+1)*32 - w if w%32!=0 else 0
-        im = F.pad(img, ( pw//2, pw-pw//2, ph//2, ph-ph//2) )
-        lbl = F.pad(lbl, ( pw//2, pw-pw//2, ph//2, ph-ph//2))
-        return im, lbl
+        im = F.pad(anchor, ( pw//2, pw-pw//2, ph//2, ph-ph//2) )
+        nanchor = F.pad(nanchor, ( pw//2, pw-pw//2, ph//2, ph-ph//2))
+        return im, nanchor
 
 class ExtToTensor(object):
     """Convert a ``PIL Image`` or ``numpy.ndarray`` to tensor.
     Converts a PIL Image or numpy.ndarray (H x W x C) in the range
     [0, 255] to a torch.FloatTensor of shape (C x H x W) in the range [0.0, 1.0].
     """
-    def __call__(self, pic, lbl):
+    def __call__(self, pic, nanchor):
         """
         Args:
             pic (PIL Image or numpy.ndarray): Image to be converted to tensor.
@@ -284,7 +292,7 @@ class ExtToTensor(object):
         Returns:
             Tensor: Converted image.
         """
-        return F.to_tensor(pic), F.to_tensor(lbl)
+        return F.to_tensor(pic), F.to_tensor(nanchor)
 
     def __repr__(self):
         return self.__class__.__name__ + '()'
@@ -303,7 +311,7 @@ class ExtNormalize(object):
         self.mean = mean
         self.std = std
 
-    def __call__(self, tensor, lbl):
+    def __call__(self, tensor, nanchor):
         """
         Args:
             tensor (Tensor): Tensor image of size (C, H, W) to be normalized.
@@ -312,7 +320,7 @@ class ExtNormalize(object):
             Tensor: Normalized Tensor image.
             Tensor: Unchanged Tensor label
         """
-        return F.normalize(tensor, self.mean, self.std), lbl
+        return F.normalize(tensor, self.mean, self.std), nanchor
 
     def __repr__(self):
         return self.__class__.__name__ + '(mean={0}, std={1})'.format(self.mean, self.std)
@@ -341,15 +349,15 @@ class ExtRandomCrop(object):
         self.pad_if_needed = pad_if_needed
 
     @staticmethod
-    def get_params(img, output_size):
+    def get_params(anchor, output_size):
         """Get parameters for ``crop`` for a random crop.
         Args:
-            img (PIL Image): Image to be cropped.
+            anchor (PIL Image): Image to be cropped.
             output_size (tuple): Expected output size of the crop.
         Returns:
             tuple: params (i, j, h, w) to be passed to ``crop`` for random crop.
         """
-        w, h = img.size
+        w, h = anchor.size
         th, tw = output_size
         if w == tw and h == th:
             return 0, 0, h, w
@@ -358,33 +366,33 @@ class ExtRandomCrop(object):
         j = random.randint(0, w - tw)
         return i, j, th, tw
 
-    def __call__(self, img, lbl):
+    def __call__(self, anchor, nanchor):
         """
         Args:
-            img (PIL Image): Image to be cropped.
-            lbl (PIL Image): Label to be cropped.
+            anchor (PIL Image): Image to be cropped.
+            nanchor (PIL Image): ~anchor to be cropped.
         Returns:
             PIL Image: Cropped image.
             PIL Image: Cropped label.
         """
-        assert img.size == lbl.size, 'size of img and lbl should be the same. %s, %s'%(img.size, lbl.size)
+        assert anchor.size == nanchor.size, 'size of anchor and nanchor should be the same. %s, %s'%(anchor.size, nanchor.size)
         if self.padding > 0:
-            img = F.pad(img, self.padding)
-            lbl = F.pad(lbl, self.padding)
+            anchor = F.pad(anchor, self.padding)
+            nanchor = F.pad(nanchor, self.padding)
 
         # pad the width if needed
-        if self.pad_if_needed and img.size[0] < self.size[1]:
-            img = F.pad(img, padding=int((1 + self.size[1] - img.size[0]) / 2))
-            lbl = F.pad(lbl, padding=int((1 + self.size[1] - lbl.size[0]) / 2))
+        if self.pad_if_needed and anchor.size[0] < self.size[1]:
+            anchor = F.pad(anchor, padding=int((1 + self.size[1] - anchor.size[0]) / 2))
+            nanchor = F.pad(nanchor, padding=int((1 + self.size[1] - nanchor.size[0]) / 2))
 
         # pad the height if needed
-        if self.pad_if_needed and img.size[1] < self.size[0]:
-            img = F.pad(img, padding=int((1 + self.size[0] - img.size[1]) / 2))
-            lbl = F.pad(lbl, padding=int((1 + self.size[0] - lbl.size[1]) / 2))
+        if self.pad_if_needed and anchor.size[1] < self.size[0]:
+            anchor = F.pad(anchor, padding=int((1 + self.size[0] - anchor.size[1]) / 2))
+            nanchor = F.pad(nanchor, padding=int((1 + self.size[0] - nanchor.size[1]) / 2))
 
-        i, j, h, w = self.get_params(img, self.size)
+        i, j, h, w = self.get_params(anchor, self.size)
 
-        return F.crop(img, i, j, h, w), F.crop(lbl, i, j, h, w)
+        return F.crop(anchor, i, j, h, w), F.crop(nanchor, i, j, h, w)
 
     def __repr__(self):
         return self.__class__.__name__ + '(size={0}, padding={1})'.format(self.size, self.padding)
@@ -407,14 +415,14 @@ class ExtResize(object):
         self.size = size
         self.interpolation = interpolation
 
-    def __call__(self, img, lbl):
+    def __call__(self, anchor, nanchor):
         """
         Args:
-            img (PIL Image): Image to be scaled.
+            anchor (PIL Image): Image to be scaled.
         Returns:
             PIL Image: Rescaled image.
         """
-        return F.resize(img, self.size, self.interpolation), F.resize(lbl, self.size, InterpolationMode.NEAREST)
+        return F.resize(anchor, self.size, self.interpolation), F.resize(nanchor, self.size, self.interpolation)
 
     def __repr__(self):
         interpolate_str = _pil_interpolation_to_str[self.interpolation]
@@ -477,36 +485,36 @@ class ExtColorJitter(object):
 
         if brightness is not None:
             brightness_factor = random.uniform(brightness[0], brightness[1])
-            transforms.append(Lambda(lambda img: F.adjust_brightness(img, brightness_factor)))
+            transforms.append(Lambda(lambda anchor: F.adjust_brightness(anchor, brightness_factor)))
 
         if contrast is not None:
             contrast_factor = random.uniform(contrast[0], contrast[1])
-            transforms.append(Lambda(lambda img: F.adjust_contrast(img, contrast_factor)))
+            transforms.append(Lambda(lambda anchor: F.adjust_contrast(anchor, contrast_factor)))
 
         if saturation is not None:
             saturation_factor = random.uniform(saturation[0], saturation[1])
-            transforms.append(Lambda(lambda img: F.adjust_saturation(img, saturation_factor)))
+            transforms.append(Lambda(lambda anchor: F.adjust_saturation(anchor, saturation_factor)))
 
         if hue is not None:
             hue_factor = random.uniform(hue[0], hue[1])
-            transforms.append(Lambda(lambda img: F.adjust_hue(img, hue_factor)))
+            transforms.append(Lambda(lambda anchor: F.adjust_hue(anchor, hue_factor)))
 
         random.shuffle(transforms)
         transform = Compose(transforms)
 
         return transform
 
-    def __call__(self, img, lbl):
+    def __call__(self, anchor, nanchor):
         """
         Args:
-            img (PIL Image): Input image.
+            anchor (PIL Image): Input image.
 
         Returns:
             PIL Image: Color jittered image.
         """
         transform = self.get_params(self.brightness, self.contrast,
                                     self.saturation, self.hue)
-        return transform(img), lbl
+        return transform(anchor), nanchor
 
     def __repr__(self):
         format_string = self.__class__.__name__ + '('
@@ -527,8 +535,8 @@ class Lambda(object):
         assert callable(lambd), repr(type(lambd).__name__) + " object is not callable"
         self.lambd = lambd
 
-    def __call__(self, img):
-        return self.lambd(img)
+    def __call__(self, anchor):
+        return self.lambd(anchor)
 
     def __repr__(self):
         return self.__class__.__name__ + '()'
@@ -550,10 +558,10 @@ class Compose(object):
     def __init__(self, transforms):
         self.transforms = transforms
 
-    def __call__(self, img):
+    def __call__(self, anchor):
         for t in self.transforms:
-            img = t(img)
-        return img
+            anchor = t(anchor)
+        return anchor
 
     def __repr__(self):
         format_string = self.__class__.__name__ + '('
@@ -583,18 +591,18 @@ class ExtRandomGrayscale(torch.nn.Module):
         super().__init__()
         self.p = p
 
-    def forward(self, img, lbl):
+    def forward(self, anchor, nanchor):
         """
         Args:
-            img (PIL Image or Tensor): Image to be converted to grayscale.
+            anchor (PIL Image or Tensor): Image to be converted to grayscale.
 
         Returns:
             PIL Image or Tensor: Randomly grayscaled image.
         """
-        num_output_channels = F.get_image_num_channels(img)
+        num_output_channels = F.get_image_num_channels(anchor)
         if torch.rand(1) < self.p:
-            return F.rgb_to_grayscale(img, num_output_channels=num_output_channels), F.rgb_to_grayscale(lbl, num_output_channels=num_output_channels)
-        return img, lbl
+            return F.rgb_to_grayscale(anchor, num_output_channels=num_output_channels), F.rgb_to_grayscale(nanchor, num_output_channels=num_output_channels)
+        return anchor, nanchor
 
     def __repr__(self):
         return self.__class__.__name__ + '(p={0})'.format(self.p)
@@ -624,13 +632,13 @@ class ExtRandomApply(torch.nn.Module):
         self.transforms = transforms
         self.p = p
 
-    def forward(self, img, lbl):
+    def forward(self, anchor, nanchor):
         if self.p < torch.rand(1):
-            return img, lbl
+            return anchor, nanchor
         for t in self.transforms:
-            img = t(img)
-            lbl = t(lbl)
-        return img, lbl
+            anchor = t(anchor)
+            nanchor = t(nanchor)
+        return anchor, nanchor
 
     def __repr__(self):
         format_string = self.__class__.__name__ + '('
@@ -639,4 +647,135 @@ class ExtRandomApply(torch.nn.Module):
             format_string += '\n'
             format_string += '    {0}'.format(t)
         format_string += '\n)'
+        return format_string
+
+def _setup_size(size, error_msg):
+    if isinstance(size, numbers.Number):
+        return int(size), int(size)
+
+    if isinstance(size, Sequence) and len(size) == 1:
+        return size[0], size[0]
+
+    if len(size) != 2:
+        raise ValueError(error_msg)
+
+    return size
+
+class ExtRandomResizedCrop(torch.nn.Module):
+    """Crop a random portion of image and resize it to a given size.
+
+    If the image is torch Tensor, it is expected
+    to have [..., H, W] shape, where ... means an arbitrary number of leading dimensions
+
+    A crop of the original image is made: the crop has a random area (H * W)
+    and a random aspect ratio. This crop is finally resized to the given
+    size. This is popularly used to train the Inception networks.
+
+    Args:
+        size (int or sequence): expected output size of the crop, for each edge. If size is an
+            int instead of sequence like (h, w), a square output size ``(size, size)`` is
+            made. If provided a sequence of length 1, it will be interpreted as (size[0], size[0]).
+
+            .. note::
+                In torchscript mode size as single int is not supported, use a sequence of length 1: ``[size, ]``.
+        scale (tuple of float): Specifies the lower and upper bounds for the random area of the crop,
+            before resizing. The scale is defined with respect to the area of the original image.
+        ratio (tuple of float): lower and upper bounds for the random aspect ratio of the crop, before
+            resizing.
+        interpolation (InterpolationMode): Desired interpolation enum defined by
+            :class:`torchvision.transforms.InterpolationMode`. Default is ``InterpolationMode.BILINEAR``.
+            If input is Tensor, only ``InterpolationMode.NEAREST``, ``InterpolationMode.BILINEAR`` and
+            ``InterpolationMode.BICUBIC`` are supported.
+            For backward compatibility integer values (e.g. ``PIL.Image.NEAREST``) are still acceptable.
+
+    """
+
+    def __init__(self, size, scale=(0.08, 1.0), ratio=(3. / 4., 4. / 3.), interpolation=InterpolationMode.BILINEAR):
+        super().__init__()
+        self.size = _setup_size(size, error_msg="Please provide only two dimensions (h, w) for size.")
+
+        if not isinstance(scale, Sequence):
+            raise TypeError("Scale should be a sequence")
+        if not isinstance(ratio, Sequence):
+            raise TypeError("Ratio should be a sequence")
+        if (scale[0] > scale[1]) or (ratio[0] > ratio[1]):
+            warnings.warn("Scale and ratio should be of kind (min, max)")
+
+        # Backward compatibility with integer value
+        if isinstance(interpolation, int):
+            warnings.warn(
+                "Argument interpolation should be of type InterpolationMode instead of int. "
+                "Please, use InterpolationMode enum."
+            )
+            interpolation = _interpolation_modes_from_int(interpolation)
+
+        self.interpolation = interpolation
+        self.scale = scale
+        self.ratio = ratio
+
+    @staticmethod
+    def get_params(
+            img: Tensor, scale: List[float], ratio: List[float]
+    ) -> Tuple[int, int, int, int]:
+        """Get parameters for ``crop`` for a random sized crop.
+
+        Args:
+            img (PIL Image or Tensor): Input image.
+            scale (list): range of scale of the origin size cropped
+            ratio (list): range of aspect ratio of the origin aspect ratio cropped
+
+        Returns:
+            tuple: params (i, j, h, w) to be passed to ``crop`` for a random
+            sized crop.
+        """
+        width, height = F.get_image_size(img)
+        area = height * width
+
+        log_ratio = torch.log(torch.tensor(ratio))
+        for _ in range(10):
+            target_area = area * torch.empty(1).uniform_(scale[0], scale[1]).item()
+            aspect_ratio = torch.exp(
+                torch.empty(1).uniform_(log_ratio[0], log_ratio[1])
+            ).item()
+
+            w = int(round(math.sqrt(target_area * aspect_ratio)))
+            h = int(round(math.sqrt(target_area / aspect_ratio)))
+
+            if 0 < w <= width and 0 < h <= height:
+                i = torch.randint(0, height - h + 1, size=(1,)).item()
+                j = torch.randint(0, width - w + 1, size=(1,)).item()
+                return i, j, h, w
+
+        # Fallback to central crop
+        in_ratio = float(width) / float(height)
+        if in_ratio < min(ratio):
+            w = width
+            h = int(round(w / min(ratio)))
+        elif in_ratio > max(ratio):
+            h = height
+            w = int(round(h * max(ratio)))
+        else:  # whole image
+            w = width
+            h = height
+        i = (height - h) // 2
+        j = (width - w) // 2
+        return i, j, h, w
+
+    def forward(self, anchor, nanchor):
+        """
+        Args:
+            anchor (PIL Image or Tensor): Image to be cropped and resized.
+
+        Returns:
+            PIL Image or Tensor: Randomly cropped and resized image.
+        """
+        i, j, h, w = self.get_params(anchor, self.scale, self.ratio)
+        return F.resized_crop(anchor, i, j, h, w, self.size, self.interpolation), F.resized_crop(nanchor, i, j, h, w, self.size, self.interpolation)
+
+    def __repr__(self):
+        interpolate_str = self.interpolation.value
+        format_string = self.__class__.__name__ + '(size={0}'.format(self.size)
+        format_string += ', scale={0}'.format(tuple(round(s, 4) for s in self.scale))
+        format_string += ', ratio={0}'.format(tuple(round(r, 4) for r in self.ratio))
+        format_string += ', interpolation={0})'.format(interpolate_str)
         return format_string
