@@ -164,6 +164,17 @@ class MoCo_ViT(MoCo):
         # predictor
         self.predictor = self._build_mlp(2, dim, mlp_dim, dim)
 
+class MoCo_Swin(MoCo):
+    def _build_projector_and_predictor_mlps(self, dim, mlp_dim):
+        hidden_dim = self.base_encoder.head.weight.shape[1]
+        del self.base_encoder.head, self.momentum_encoder.head # remove original fc layer
+
+        # projectors
+        self.base_encoder.head = self._build_mlp(3, hidden_dim, mlp_dim, dim)
+        self.momentum_encoder.head = self._build_mlp(3, hidden_dim, mlp_dim, dim)
+
+        # predictor
+        self.predictor = self._build_mlp(2, dim, mlp_dim, dim)
 
 # utils
 @torch.no_grad()

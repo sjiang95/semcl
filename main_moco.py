@@ -14,6 +14,7 @@ import random
 import shutil
 import time
 from datetime import datetime, timedelta
+from pytz import timezone
 import warnings
 from functools import partial
 import multiprocessing
@@ -39,6 +40,8 @@ import moco.loader
 import moco.optimizer
 
 import vits
+import swin_transformer
+from swin_transformer import SwinTransformer
 
 from load_custom_data import CustomImageDataset
 from utils import ext_transforms as et
@@ -48,13 +51,16 @@ torchvision_model_names = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
     and callable(torchvision_models.__dict__[name]))
 
-model_names = ['vit_small', 'vit_base', 'vit_conv_small', 'vit_conv_base'] + torchvision_model_names
+model_names = ['swin_tiny', 'swin_small', 'swin_base', 'vit_small', 'vit_base', 'vit_conv_small', 'vit_conv_base'] + torchvision_model_names
 
 pretrained_weight_url={
     'resnet50': 'https://dl.fbaipublicfiles.com/moco-v3/r-50-1000ep/r-50-1000ep.pth.tar',
     'resnet101': 'https://download.pytorch.org/models/resnet101-63fe2227.pth',
     'vit_small': 'https://dl.fbaipublicfiles.com/moco-v3/vit-s-300ep/vit-s-300ep.pth.tar',
-    'vit_base': 'https://dl.fbaipublicfiles.com/moco-v3/vit-b-300ep/vit-b-300ep.pth.tar'
+    'vit_base': 'https://dl.fbaipublicfiles.com/moco-v3/vit-b-300ep/vit-b-300ep.pth.tar',
+    'swin_tiny': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_tiny_patch4_window7_224.pth', 
+    'swin_small': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_small_patch4_window7_224.pth', 
+    'swin_base': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_base_patch4_window7_224_22k.pth',
 }
 
 parser = argparse.ArgumentParser(description='MoCo ImageNet Pre-Training')
@@ -85,8 +91,8 @@ parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
 parser.add_argument('--wd', '--weight-decay', default=1e-6, type=float,
                     metavar='W', help='weight decay (default: 1e-6)',
                     dest='weight_decay')
-parser.add_argument('-p', '--print-freq', default=10, type=int,
-                    metavar='N', help='print frequency (default: 10)')
+parser.add_argument('-p', '--print-freq', default=100, type=int,
+                    metavar='N', help='print frequency (default: 100)')
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
 parser.add_argument('--world-size', default=-1, type=int,
@@ -151,7 +157,8 @@ parser.add_argument("--output_stride", type=int, default=16, choices=[8, 16],
                     help="This option is valid for only resnet backbones.")
 
 def main():
-    start_time=datetime.now()
+    tz_tokyo=timezone('Asia/Tokyo')
+    start_time=datetime.now(tz_tokyo)
     print("{}: Training started.".format(start_time))
     args = parser.parse_args()
 
@@ -195,6 +202,7 @@ def main():
             if not os.path.exists(path_to_pretrained_weights): # Download dict file if not exists
                 download_preweights(pretrained_weight_url,path_to_pretrained_weights,args.arch)
         args.pretrained=path_to_pretrained_weights
+        print("Use pretrained weight at", args.pretrained)
 
     if args.multiprocessing_distributed:
         # Since we have ngpus_per_node processes per node, the total world_size
@@ -207,7 +215,7 @@ def main():
         # Simply call main_worker function
         main_worker(args.gpu, ngpus_per_node, args)
 
-    end_time=datetime.now()
+    end_time=datetime.now(tz_tokyo)
     print("{}: Training finished.".format(start_time))
     train_time_consume=end_time-start_time
     print("This training process takes ",str(train_time_consume))
@@ -266,11 +274,19 @@ def main_worker(gpu, ngpus_per_node, args):
         model = moco.builder.MoCo_ViT(
             partial(vits.__dict__[args.arch], stop_grad_conv1=args.stop_grad_conv1),
             args.moco_dim, args.moco_mlp_dim, args.moco_t)
+        model=load_moco_backbone(model,args=args)
+    elif args.arch.startswith('swin'):
+        # Unlike moco whose pretrained weights contain both base and momentum encoder,
+        # swin transformer pretrained weights contains only the backbone (base encoder) itself.
+        model=moco.builder.MoCo_Swin(
+            partial(swin_transformer.__dict__[args.arch],pretrained=args.pretrained), 
+            args.moco_dim, args.moco_mlp_dim, args.moco_t, args.loss_mode
+        )
     else:
         model = moco.builder.MoCo_ResNet(
             partial(torchvision_models.__dict__[args.arch], zero_init_residual=True,replace_stride_with_dilation=replace_stride_with_dilation), 
             args.moco_dim, args.moco_mlp_dim, args.moco_t, args.loss_mode)
-        model=load_backbone(model,args=args)
+        model=load_moco_backbone(model,args=args)
 
     # infer learning rate before changing batch size
     args.lr = args.lr * args.batch_size / 256
@@ -495,7 +511,7 @@ def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if i % args.print_freq == 0:
+        if i % args.print_freq == 0 or i==iters_per_epoch-1:
             progress.display(i)
 
 
@@ -566,7 +582,7 @@ def adjust_moco_momentum(epoch, args):
     m = 1. - 0.5 * (1. + math.cos(math.pi * epoch / args.epochs)) * (1. - args.moco_m)
     return m
 
-def load_backbone(backbone:nn.Module,args):
+def load_moco_backbone(backbone:nn.Module,args):
     #load state_dict
     checkpoint = torch.load(args.pretrained, map_location="cpu")
     # rename moco pre-trained keys
