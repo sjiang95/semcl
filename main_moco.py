@@ -39,7 +39,7 @@ import moco.builder
 import moco.loader
 import moco.optimizer
 
-import vits
+# import vits
 import swin_transformer
 from swin_transformer import SwinTransformer
 
@@ -51,13 +51,11 @@ torchvision_model_names = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
     and callable(torchvision_models.__dict__[name]))
 
-model_names = ['swin_tiny', 'swin_small', 'swin_base', 'vit_small', 'vit_base', 'vit_conv_small', 'vit_conv_base'] + torchvision_model_names
+model_names = ['swin_tiny', 'swin_small', 'swin_base'] + torchvision_model_names
 
 pretrained_weight_url={
     'resnet50': 'https://dl.fbaipublicfiles.com/moco-v3/r-50-1000ep/r-50-1000ep.pth.tar',
     'resnet101': 'https://download.pytorch.org/models/resnet101-63fe2227.pth',
-    'vit_small': 'https://dl.fbaipublicfiles.com/moco-v3/vit-s-300ep/vit-s-300ep.pth.tar',
-    'vit_base': 'https://dl.fbaipublicfiles.com/moco-v3/vit-b-300ep/vit-b-300ep.pth.tar',
     'swin_tiny': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_tiny_patch4_window7_224.pth', 
     'swin_small': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_small_patch4_window7_224.pth', 
     'swin_base': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_base_patch4_window7_224_22k.pth',
@@ -270,12 +268,7 @@ def main_worker(gpu, ngpus_per_node, args):
         # aspp_dilate = [6, 12, 18]
     # create model
     print("=> creating model '{}'".format(args.arch))
-    if args.arch.startswith('vit'):
-        model = moco.builder.MoCo_ViT(
-            partial(vits.__dict__[args.arch], stop_grad_conv1=args.stop_grad_conv1),
-            args.moco_dim, args.moco_mlp_dim, args.moco_t)
-        model=load_moco_backbone(model,args=args)
-    elif args.arch.startswith('swin'):
+    if args.arch.startswith('swin'):
         # Unlike moco whose pretrained weights contain both base and momentum encoder,
         # swin transformer pretrained weights contains only the backbone (base encoder) itself.
         model=moco.builder.MoCo_Swin(
@@ -431,6 +424,8 @@ def main_worker(gpu, ngpus_per_node, args):
         num_workers=args.workers, pin_memory=True, sampler=train_sampler, drop_last=True)
 
     for epoch in range(args.start_epoch, args.epochs):
+        epoch_start=datetime.now(timezone('Asia/Tokyo'))
+        print(f"{epoch_start}: Start epoch {epoch}/{args.epochs}.")
         if args.distributed:
             train_sampler.set_epoch(epoch)
 
@@ -460,6 +455,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 os.remove(previous_filename)
                 print("Remove previous checkpoint: ",previous_filename)
 
+        print(f"Epoch {epoch}/{args.epochs} takes {str(datetime.now(timezone('Asia/Tokyo'))-epoch_start)}.")
     if args.rank == 0:
         summary_writer.close()
 
