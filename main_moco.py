@@ -14,7 +14,7 @@ import random
 import shutil
 import time
 from datetime import datetime, timedelta
-from pytz import timezone
+from tzlocal import get_localzone
 import warnings
 from functools import partial
 import multiprocessing
@@ -155,8 +155,8 @@ parser.add_argument("--output_stride", type=int, default=16, choices=[8, 16],
                     help="This option is valid for only resnet backbones.")
 
 def main():
-    tz_tokyo=timezone('Asia/Tokyo')
-    start_time=datetime.now(tz_tokyo)
+    tz_local=get_localzone()
+    start_time=datetime.now(tz_local)
     print("{}: Training started.".format(start_time))
     args = parser.parse_args()
 
@@ -213,8 +213,8 @@ def main():
         # Simply call main_worker function
         main_worker(args.gpu, ngpus_per_node, args)
 
-    end_time=datetime.now(tz_tokyo)
-    print("{}: Training finished.".format(start_time))
+    end_time=datetime.now(tz_local)
+    print("{}: Training finished.".format(end_time))
     train_time_consume=end_time-start_time
     print("This training process takes ",str(train_time_consume))
 
@@ -424,7 +424,7 @@ def main_worker(gpu, ngpus_per_node, args):
         num_workers=args.workers, pin_memory=True, sampler=train_sampler, drop_last=True)
 
     for epoch in range(args.start_epoch, args.epochs):
-        epoch_start=datetime.now(timezone('Asia/Tokyo'))
+        epoch_start=datetime.now(get_localzone())
         print(f"{epoch_start}: Start epoch {epoch}/{args.epochs}.")
         if args.distributed:
             train_sampler.set_epoch(epoch)
@@ -455,7 +455,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 os.remove(previous_filename)
                 print("Remove previous checkpoint: ",previous_filename)
 
-        print(f"Epoch {epoch}/{args.epochs} takes {str(datetime.now(timezone('Asia/Tokyo'))-epoch_start)}.")
+        print(f"Epoch {epoch}/{args.epochs} takes {str(datetime.now(get_localzone())-epoch_start)}.")
     if args.rank == 0:
         summary_writer.close()
 
