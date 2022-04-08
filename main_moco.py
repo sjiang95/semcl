@@ -423,6 +423,7 @@ def main_worker(gpu, ngpus_per_node, args):
         train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
         num_workers=args.workers, pin_memory=True, sampler=train_sampler, drop_last=True)
 
+    accumulate_epoch_dur=0.0
     for epoch in range(args.start_epoch, args.epochs):
         epoch_start=datetime.now(get_localzone())
         print(f"{epoch_start}: Start epoch {epoch}/{args.epochs}.")
@@ -454,8 +455,14 @@ def main_worker(gpu, ngpus_per_node, args):
             if os.path.exists(previous_filename):
                 os.remove(previous_filename)
                 print("Remove previous checkpoint: ",previous_filename)
+        epoch_end=datetime.now(get_localzone())
+        # calculate ETA (estimated time of arrival)
+        epoch_dur=(epoch_end-epoch_start).total_seconds()
+        accumulate_epoch_dur+=epoch_dur
+        print(f"Epoch {epoch}/{args.epochs} takes {str(epoch_dur)}.")
+        eta=timedelta(seconds=accumulate_epoch_dur/(epoch+1)*(args.epochs-1-epoch)) + datetime.now(get_localzone())
+        print(f"[ETA] {eta}")
 
-        print(f"Epoch {epoch}/{args.epochs} takes {str(datetime.now(get_localzone())-epoch_start)}.")
     if args.rank == 0:
         summary_writer.close()
 
