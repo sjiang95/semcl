@@ -459,7 +459,7 @@ def main_worker(gpu, ngpus_per_node, args):
         # calculate ETA (estimated time of arrival)
         epoch_dur=(epoch_end-epoch_start).total_seconds()
         accumulate_epoch_dur+=epoch_dur
-        print(f"Epoch {epoch}/{args.epochs} takes {str(epoch_dur)}.")
+        print(f"Epoch {epoch}/{args.epochs} takes {str(epoch_end-epoch_start)}.")
         eta=timedelta(seconds=accumulate_epoch_dur/(epoch+1)*(args.epochs-1-epoch)) + datetime.now(get_localzone())
         print(f"[ETA] {eta}")
 
