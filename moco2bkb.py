@@ -17,9 +17,6 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchvision.models as torchvision_models
 
-import moco.builder
-
-# import vits
 import swin_transformer
 from swin_transformer import SwinTransformer
 
