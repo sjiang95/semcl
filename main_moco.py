@@ -61,7 +61,7 @@ pretrained_weight_url={
     'swin_base': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_base_patch4_window7_224_22k.pth',
 }
 
-parser = argparse.ArgumentParser(description='MoCo ImageNet Pre-Training')
+parser = argparse.ArgumentParser(description='SemCL Pre-Training')
 parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
 parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet50',
@@ -158,6 +158,7 @@ def main():
     tz_local=get_localzone()
     start_time=datetime.now(tz_local)
     print("{}: Training started.".format(start_time))
+    print(f"Use Pytorch {torch.__version__} with cuda {torch.version.cuda}")
     args = parser.parse_args()
 
     if args.seed is not None:
