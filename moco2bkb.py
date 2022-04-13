@@ -34,12 +34,12 @@ parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet50',
 # deeplab
 parser.add_argument("--output_stride", type=int, default=16, choices=[8, 16],
                     help="This option is valid for only resnet backbones.")
-parser.add_argument('--pretrained',default='',type=str, metavar='PATH',
+parser.add_argument('full_ckpt',default='',type=str, metavar='PATH',
                     help="Path to pretrained weights having same architecture with --arch option.")
 
 def load_moco_backbone(backbone:nn.Module, linear_keyword,args):
     #load state_dict
-    checkpoint = torch.load(args.pretrained, map_location="cpu")
+    checkpoint = torch.load(args.full_ckpt, map_location="cpu")
     # rename moco pre-trained keys
     state_dict = checkpoint['state_dict']
     for k in list(state_dict.keys()):
@@ -65,7 +65,7 @@ def moco2bkb():
     args = parser.parse_args()
 
     # Retrieve pretrained weights
-    assert (len(args.pretrained)>0), "You have to specify pretrained ckpt path."
+    assert (len(args.full_ckpt)>0), "You have to specify pretrained ckpt path."
 
     # This is valid for only resnet models
     if args.output_stride==8:
@@ -88,8 +88,8 @@ def moco2bkb():
         model=load_moco_backbone(model,linear_keyword=linear_keyword,args=args)
 
     summary(model,input_size=(1,3,224,224))
-    slash_idx=str(args.pretrained).rfind('/')
-    bkb_filename=str(args.pretrained)[:slash_idx+1]+"bkb_"+str(args.pretrained)[slash_idx+1:]
+    slash_idx=str(args.full_ckpt).rfind('/')
+    bkb_filename=str(args.full_ckpt)[:slash_idx+1]+"bkb_"+str(args.full_ckpt)[slash_idx+1:]
     save_checkpoint(
         {'state_dict': model.state_dict(),}
         ,filename=bkb_filename)
