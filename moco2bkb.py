@@ -67,7 +67,7 @@ def moco2bkb():
     # Retrieve pretrained weights
     assert (len(args.full_ckpt)>0), "You have to specify pretrained ckpt path."
     # check existence of full ckpt
-    assert (os.path.exists(args.full_ckpt)), f"Given full checkpoint at {args.full_ckpt} does not exist."
+    assert (os.path.isfile(args.full_ckpt)), f"Given full checkpoint at {args.full_ckpt} does not exist."
 
     # This is valid for only resnet models
     if args.output_stride==8:
