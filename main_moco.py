@@ -240,9 +240,11 @@ def main_worker(gpu, ngpus_per_node, args):
             # For multiprocessing distributed training, rank needs to be the
             # global rank among all the processes
             args.rank = args.rank * ngpus_per_node + gpu
+        print(f"[DDP] Attempt to initialize init_process_group() via {args.dist_url} with backend {args.dist_backend}")
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                 world_size=args.world_size, rank=args.rank)
-        torch.distributed.barrier()
+        print("[DDP] init_process_group() is initialized via backend:", dist.get_backend())
+        dist.barrier()
 
     if args.loss_mode=='L':
         print("Loss mode: L=L0+loss_mocov3")
@@ -436,9 +438,9 @@ def main_worker(gpu, ngpus_per_node, args):
         
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                 and args.rank == 0): # only the first GPU saves checkpoint
-            ckpt_filename=('ckpt/%s/%s/%s/batchsize%04d/%s_%s_%s_ecdbatchsize%04d_epoch%04dof%04d.pth.tar' % (
+            ckpt_filename=('ckpt/%s/%s/%s/batchsize%04d/%s_%s_%s_ecd%04depbatchsize%04d.pth.tar' % (
             dataset_str,args.arch,args.loss_mode, total_batch_size, 
-            dataset_str,args.arch,args.loss_mode,total_batch_size,epoch, args.epochs))
+            dataset_str,args.arch,args.loss_mode, args.epochs,total_batch_size))
             save_checkpoint({
                 'epoch': epoch + 1,
                 'arch': args.arch,
@@ -447,15 +449,8 @@ def main_worker(gpu, ngpus_per_node, args):
                 'scaler': scaler.state_dict(),
             }, is_best=False, filename=os.path.join(args.output_dir, ckpt_filename)
             )
-            print("Save checkpoint to ",os.path.abspath(ckpt_filename))
+            print(f"{datetime.now(get_localzone())}: Save checkpoint of epoch {epoch} to {os.path.abspath(ckpt_filename)}")
             
-            previous_filename=os.path.join(args.output_dir,
-                                            ('ckpt/%s/%s/%s/batchsize%04d/%s_%s_%s_ecdbatchsize%04d_epoch%04dof%04d.pth.tar' % (dataset_str,args.arch,args.loss_mode, total_batch_size,
-                                            dataset_str,args.arch,args.loss_mode,total_batch_size,epoch-1, args.epochs))
-                                            )
-            if os.path.exists(previous_filename):
-                os.remove(previous_filename)
-                print("Remove previous checkpoint: ",previous_filename)
         epoch_end=datetime.now(get_localzone())
         # calculate ETA (estimated time of arrival)
         epoch_dur=(epoch_end-epoch_start).total_seconds()
@@ -463,6 +458,7 @@ def main_worker(gpu, ngpus_per_node, args):
         print(f"Epoch {epoch}/{args.epochs} takes {str(epoch_end-epoch_start)}.")
         eta=timedelta(seconds=accumulate_epoch_dur/(epoch+1)*(args.epochs-1-epoch)) + datetime.now(get_localzone())
         print(f"[ETA] {eta}")
+        print()
 
     if args.rank == 0:
         summary_writer.close()
