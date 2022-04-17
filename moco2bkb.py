@@ -34,8 +34,11 @@ parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet50',
 # deeplab
 parser.add_argument("--output_stride", type=int, default=16, choices=[8, 16],
                     help="This option is valid for only resnet backbones.")
+
 parser.add_argument('full_ckpt',default='',type=str, metavar='PATH',
                     help="Path to pretrained weights having same architecture with --arch option.")
+parser.add_argument('--summary-only', action='store_true',
+                    help='Print backbone summary without saving.')
 
 def load_moco_backbone(backbone:nn.Module, linear_keyword,args):
     #load state_dict
@@ -90,11 +93,14 @@ def moco2bkb():
         model=load_moco_backbone(model,linear_keyword=linear_keyword,args=args)
 
     summary(model,input_size=(1,3,224,224))
-    slash_idx=str(args.full_ckpt).rfind('/')
-    bkb_filename=str(args.full_ckpt)[:slash_idx+1]+"bkb_"+str(args.full_ckpt)[slash_idx+1:]
-    save_checkpoint(
-        {'state_dict': model.state_dict(),}
-        ,filename=bkb_filename)
+    if args.summary_only:
+        print("In 'summary_only' mode, backbone will not be saved.")
+    else:
+        slash_idx=str(args.full_ckpt).rfind('/')
+        bkb_filename=str(args.full_ckpt)[:slash_idx+1]+"bkb_"+str(args.full_ckpt)[slash_idx+1:]
+        save_checkpoint(
+            {'state_dict': model.state_dict(),}
+            ,filename=bkb_filename)
 
 if __name__ == '__main__':
     moco2bkb()
