@@ -1,0 +1,10 @@
+*__pycache__
+.cmake
+.history
+.vscode
+ckpt
+CMake*
+Makefile
+pretrained
+runs
+*.cmake
