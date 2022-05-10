@@ -73,8 +73,12 @@ parser.add_argument('--pretrained',default='',type=str, metavar='PATH',
                     help="Path to pretrained weights having same architecture with --arch option.")
 parser.add_argument('-j', '--workers', default=multiprocessing.cpu_count(), type=int, metavar='N',
                     help='number of data loading workers (default: use multiprocessing.cpu_count() for every GPU)')
-parser.add_argument('--epochs', default=100, type=int, metavar='N',
+parser.add_argument('--epochs', default=None, type=int, metavar='N',
                     help='number of total epochs to run')
+parser.add_argument('--iters', default=None, type=int, metavar='N',
+                    help='number of total iterations to run')
+parser.add_argument('--iter-mode', default='iters', type=str,
+                    help='Iteration mode: total iters or total epochs')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
 parser.add_argument('-b', '--batch-size', default=4096, type=int,
@@ -132,8 +136,8 @@ parser.add_argument('--stop-grad-conv1', action='store_true',
 parser.add_argument('--optimizer', default='adamw', type=str,
                     choices=['lars', 'adamw'],
                     help='optimizer used (default: lars)')
-parser.add_argument('--warmup-epochs', default=None, type=int, metavar='N',
-                    help='number of warmup epochs')
+parser.add_argument('--warmup-iters', default=None, type=int, metavar='N',
+                    help='number of warmup iters')
 parser.add_argument('--crop-min', default=0.08, type=float,
                     help='minimum scale for random cropping (default: 0.08)')
                     
@@ -174,14 +178,19 @@ def main():
     if args.gpu is not None:
         warnings.warn('You have chosen a specific GPU. This will completely disable data parallelism.')
 
-    if args.warmup_epochs is None:
-        args.warmup_epochs=args.epochs//8
-        print("warmup_epochs is not given. Set it to", args.warmup_epochs)
-    else:
-        print("User specified warmup_epochs=",args.warmup_epochs)
-
     if args.dist_url == "env://" and args.world_size == -1:
         args.world_size = int(os.environ["WORLD_SIZE"])
+
+    if args.iters is not None and args.epochs is not None:
+        raise AssertionError("You can set either `--iters` or `--epochs`, not both.")
+    elif args.iters is not None and args.epochs is None:
+        args.iter_mode='iters'
+    elif args.iters is None and args.epochs is not None:
+        args.iter_mode='epochs'
+    elif args.iters is None and args.epochs is None:
+        args.iters=30000
+        print(f"Neither `--iters` nor `--epochs` is given, set total iterations to {args.iters}")
+        args.iter_mode='epochs'
 
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
 
@@ -426,6 +435,19 @@ def main_worker(gpu, ngpus_per_node, args):
         train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
         num_workers=args.workers, pin_memory=True, sampler=train_sampler, drop_last=True)
 
+    iters_per_epoch = len(train_loader)
+
+    if args.epochs is None:
+        args.epochs=math.ceil(args.iters/iters_per_epoch)
+    else: # use the set epoch to calculate total iters
+        args.iters=args.epochs*iters_per_epoch
+
+    if args.warmup_iters is None:
+            args.warmup_iters=args.iters//8
+            print("warmup_iters is not given. Set it to", args.warmup_iters)
+    else:
+        print("User specified warmup_iters=",args.warmup_iters)
+
     accumulate_epoch_dur=0.0
     for epoch in range(args.start_epoch, args.epochs):
         epoch_start=datetime.now(get_localzone())
@@ -469,7 +491,7 @@ def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):
     learning_rates = AverageMeter('LR', ':.4e')
     losses = AverageMeter('Loss', ':.4e')
     progress = ProgressMeter(
-        len(train_loader),
+        args.iters,
         [batch_time, data_time, learning_rates, losses],
         prefix="Epoch: [{}]".format(epoch))
 
@@ -483,8 +505,12 @@ def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):
         # measure data loading time
         data_time.update(time.time() - end)
 
+        # check iterations
+        cur_iters=epoch*iters_per_epoch+i
+        if args.iter_mode=='iters' and cur_iters>=args.iters: break
+
         # adjust learning rate and momentum coefficient per iteration
-        lr = adjust_learning_rate(optimizer, epoch + i / iters_per_epoch, args)
+        lr = adjust_learning_rate(optimizer, cur_iters, args)
         learning_rates.update(lr)
         if args.moco_m_cos:
             moco_m = adjust_moco_momentum(epoch + i / iters_per_epoch, args)
@@ -511,8 +537,8 @@ def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if i % args.print_freq == 0 or i==iters_per_epoch-1:
-            progress.display(i)
+        if cur_iters % args.print_freq == 0 or i==iters_per_epoch-1:
+            progress.display(cur_iters)
 
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
@@ -566,12 +592,12 @@ class ProgressMeter(object):
         return '[' + fmt + '/' + fmt.format(num_batches) + ']'
 
 
-def adjust_learning_rate(optimizer, epoch, args):
+def adjust_learning_rate(optimizer, iter, args):
     """Decays the learning rate with half-cycle cosine after warmup"""
-    if epoch < args.warmup_epochs:
-        lr = args.lr * epoch / args.warmup_epochs 
+    if iter < args.warmup_iters:
+        lr = args.lr * iter / args.warmup_iters 
     else:
-        lr = args.lr * 0.5 * (1. + math.cos(math.pi * (epoch - args.warmup_epochs) / (args.epochs - args.warmup_epochs)))
+        lr = args.lr * 0.5 * (1. + math.cos(math.pi * (iter - args.warmup_iters) / (args.iters - args.warmup_iters)))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
     return lr
