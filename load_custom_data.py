@@ -5,7 +5,10 @@ from torchvision.transforms import ToTensor
 import os
 from torchvision.io import read_image
 import pandas as pd
-from PIL import Image
+from PIL import Image, ImageFile
+# https://github.com/python-pillow/Pillow/issues/1510#issuecomment-151458026
+# Add the following line to fix a pillow error
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 class CustomImageDataset(Dataset):
     def __init__(self, img_dir, transform=None, target_transform=None, datasets=['coco', 'ade']):
