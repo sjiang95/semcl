@@ -537,7 +537,7 @@ def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if cur_iters % args.print_freq == 0 or i==iters_per_epoch-1:
+        if cur_iters % args.print_freq == 0 or i==iters_per_epoch-1 or i==0:
             progress.display(cur_iters)
 
 
