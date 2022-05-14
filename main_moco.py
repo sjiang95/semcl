@@ -81,6 +81,8 @@ parser.add_argument('--iter-mode', default='iters', type=str,
                     help='Iteration mode: total iters or total epochs')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
+parser.add_argument('--cropsize', default=224, type=int, metavar='N',
+                    help='image crop size. Swin dopted 224*224.')
 parser.add_argument('-b', '--batch-size', default=4096, type=int,
                     metavar='N',
                     help='mini-batch size (default: 4096), this is the total '
@@ -377,11 +379,11 @@ def main_worker(gpu, ngpus_per_node, args):
     traindir = args.data
     normalize = et.ExtNormalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
-
+    print(f"Crop size: {args.cropsize}")
     # directly resize original image for complete semantic information
     augmentation0=[
-        et.ExtResize(224),
-        et.ExtRandomCrop(224),
+        et.ExtResize(args.cropsize),
+        et.ExtRandomCrop(args.cropsize),
         et.ExtRandomHorizontalFlip(),
         et.ExtToTensor(),
         normalize
@@ -389,9 +391,9 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # follow BYOL's augmentation recipe: https://arxiv.org/abs/2006.07733
     augmentation1 = [
-        # et.ExtResize(224),
-        # et.ExtRandomCrop(224),
-        et.ExtRandomResizedCrop(224, scale=(args.crop_min, 1.)),
+        # et.ExtResize(args.cropsize),
+        # et.ExtRandomCrop(args.cropsize),
+        et.ExtRandomResizedCrop(args.cropsize, scale=(args.crop_min, 1.)),
         et.ExtRandomApply([
             transforms.ColorJitter(0.4, 0.4, 0.2, 0.1)  # not strengthened
         ], p=0.8),
@@ -403,9 +405,9 @@ def main_worker(gpu, ngpus_per_node, args):
     ]
 
     augmentation2 = [
-        # et.ExtResize(224),
-        # et.ExtRandomCrop(224),
-        et.ExtRandomResizedCrop(224, scale=(args.crop_min, 1.)),
+        # et.ExtResize(args.cropsize),
+        # et.ExtRandomCrop(args.cropsize),
+        et.ExtRandomResizedCrop(args.cropsize, scale=(args.crop_min, 1.)),
         et.ExtRandomApply([
             transforms.ColorJitter(0.4, 0.4, 0.2, 0.1)  # not strengthened
         ], p=0.8),
@@ -460,9 +462,9 @@ def main_worker(gpu, ngpus_per_node, args):
         
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                 and args.rank == 0): # only the first GPU saves checkpoint
-            ckpt_filename=('ckpt/%s/%s/%s/batchsize%04d/%s_%s_%s_ecd%04depbatchsize%04d.pth.tar' % (
+            ckpt_filename=('ckpt/%s/%s/%s/batchsize%04d/%s_%s_%s_ecd%04depbatchsize%04d_crop%d.pth.tar' % (
             dataset_str,args.arch,args.loss_mode, total_batch_size, 
-            dataset_str,args.arch,args.loss_mode, args.epochs,total_batch_size))
+            dataset_str,args.arch,args.loss_mode, args.epochs,total_batch_size,args.cropsize))
             save_checkpoint({
                 'epoch': epoch + 1,
                 'arch': args.arch,
