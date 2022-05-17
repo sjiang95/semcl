@@ -465,15 +465,16 @@ def main_worker(gpu, ngpus_per_node, args):
             ckpt_filename=('ckpt/%s/%s/%s/batchsize%04d/%s_%s_%s_ecd%04depbatchsize%04d_crop%d.pth.tar' % (
             dataset_str,args.arch,args.loss_mode, total_batch_size, 
             dataset_str,args.arch,args.loss_mode, args.epochs,total_batch_size,args.cropsize))
+            full_filename=os.path.join(args.output_dir, ckpt_filename)
             save_checkpoint({
                 'epoch': epoch + 1,
                 'arch': args.arch,
                 'state_dict': model.state_dict(),
                 'optimizer' : optimizer.state_dict(),
                 'scaler': scaler.state_dict(),
-            }, is_best=False, filename=os.path.join(args.output_dir, ckpt_filename)
+            }, is_best=False, filename=full_filename
             )
-            print(f"{datetime.now(get_localzone())}: Save checkpoint of epoch {epoch} to {os.path.abspath(ckpt_filename)}")
+            print(f"{datetime.now(get_localzone())}: Save checkpoint of epoch {epoch} to {os.path.abspath(full_filename)}")
             
         epoch_end=datetime.now(get_localzone())
         # calculate ETA (estimated time of arrival)
