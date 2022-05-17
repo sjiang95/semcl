@@ -599,7 +599,7 @@ class ExtRandomGrayscale(torch.nn.Module):
         Returns:
             PIL Image or Tensor: Randomly grayscaled image.
         """
-        num_output_channels = F.get_image_num_channels(anchor)
+        num_output_channels = F._get_image_num_channels(anchor)
         if torch.rand(1) < self.p:
             return F.rgb_to_grayscale(anchor, num_output_channels=num_output_channels), F.rgb_to_grayscale(nanchor, num_output_channels=num_output_channels)
         return anchor, nanchor
@@ -728,7 +728,7 @@ class ExtRandomResizedCrop(torch.nn.Module):
             tuple: params (i, j, h, w) to be passed to ``crop`` for a random
             sized crop.
         """
-        width, height = F.get_image_size(img)
+        width, height = F._get_image_size(img)
         area = height * width
 
         log_ratio = torch.log(torch.tensor(ratio))
