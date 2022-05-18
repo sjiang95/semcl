@@ -462,9 +462,9 @@ def main_worker(gpu, ngpus_per_node, args):
         
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                 and args.rank == 0): # only the first GPU saves checkpoint
-            ckpt_filename=('ckpt/%s/%s/%s/batchsize%04d/%s_%s_%s_ecd%04depbatchsize%04d_crop%d.pth.tar' % (
+            ckpt_filename=('ckpt/%s/%s/%s/batchsize%04d/%s_%s_%s_ecd%04dep%05ditbatchsize%04d_crop%d.pth.tar' % (
             dataset_str,args.arch,args.loss_mode, total_batch_size, 
-            dataset_str,args.arch,args.loss_mode, args.epochs,total_batch_size,args.cropsize))
+            dataset_str,args.arch,args.loss_mode, args.epochs,args.iters,total_batch_size,args.cropsize))
             full_filename=os.path.join(args.output_dir, ckpt_filename)
             save_checkpoint({
                 'epoch': epoch + 1,
