@@ -510,7 +510,9 @@ def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):
 
         # check iterations
         cur_iters=epoch*iters_per_epoch+i
-        if args.iter_mode=='iters' and cur_iters>=args.iters: break
+        if args.iter_mode=='iters' and cur_iters>=args.iters: 
+            progress.display(cur_iters-1) # print status of last iteration
+            break
 
         # adjust learning rate and momentum coefficient per iteration
         lr = adjust_learning_rate(optimizer, cur_iters, args)
