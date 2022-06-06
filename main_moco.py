@@ -55,7 +55,7 @@ model_names = ['swin_tiny', 'swin_small', 'swin_base'] + torchvision_model_names
 
 pretrained_weight_url={
     'resnet50': 'https://dl.fbaipublicfiles.com/moco-v3/r-50-1000ep/r-50-1000ep.pth.tar',
-    'resnet101': 'https://download.pytorch.org/models/resnet101-63fe2227.pth',
+    'resnet101': 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet101_a1h-36d3f2aa.pth',
     'swin_tiny': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_tiny_patch4_window7_224.pth', 
     'swin_small': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_small_patch4_window7_224.pth', 
     'swin_base': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_base_patch4_window7_224_22k.pth',
@@ -481,7 +481,7 @@ def main_worker(gpu, ngpus_per_node, args):
         epoch_dur=(epoch_end-epoch_start).total_seconds()
         accumulate_epoch_dur+=epoch_dur
         print(f"Epoch {epoch}/{args.epochs} takes {str(epoch_end-epoch_start)}.")
-        eta=timedelta(seconds=accumulate_epoch_dur/(epoch+1)*(args.epochs-1-epoch)) + datetime.now(get_localzone())
+        eta=timedelta(seconds=accumulate_epoch_dur/((epoch+1)*iters_per_epoch)*(args.iters-1-(epoch+1)*iters_per_epoch)) + datetime.now(get_localzone())
         print(f"[ETA] {eta}")
         print()
 
