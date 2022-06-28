@@ -8,3 +8,6 @@ Makefile
 pretrained
 runs
 *.cmake
+compile_commands.json
+model_all_layer.ipynb
+model_structre.ipynb
