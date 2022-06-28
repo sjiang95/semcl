@@ -241,8 +241,10 @@ def main_worker(gpu, ngpus_per_node, args):
             pass
         builtins.print = print_pass
 
-    if args.gpu is not None:
+    if args.multiprocessing_distributed :
         print("Use GPU: {} for printing".format(args.gpu))
+    elif args.multiprocessing_distributed is False and args.gpu is not None:
+        print("Use GPU: {} for traning".format(args.gpu))
 
     if args.distributed:
         if args.dist_url == "env://" and args.rank == -1:
@@ -352,7 +354,7 @@ def main_worker(gpu, ngpus_per_node, args):
             dataset_str=dataset_str+dataset+"N"
     
     summary_writer_str=('%s_%s_%s_batchsize%04d' % (dataset_str,args.arch,args.loss_mode,total_batch_size))
-    summary_writer = SummaryWriter(comment=summary_writer_str,filename_suffix=summary_writer_str) if args.rank == 0 else None
+    summary_writer = SummaryWriter(comment=summary_writer_str,filename_suffix=summary_writer_str) if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank == 0) else None
 
     # optionally resume from a checkpoint
     if args.resume:
@@ -485,7 +487,7 @@ def main_worker(gpu, ngpus_per_node, args):
         print(f"[ETA] {eta}")
         print()
 
-    if args.rank == 0:
+    if not args.multiprocessing_distributed or args.rank == 0:
         summary_writer.close()
 
 def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):
