@@ -52,8 +52,8 @@ def load_moco_backbone(backbone:nn.Module, linear_keyword,args):
             state_dict[k[len("module.base_encoder."):]] = state_dict[k]
         # delete renamed or unused k
         del state_dict[k]
-    backbone.load_state_dict(state_dict, strict=False)#
-    # assert set(msg.missing_keys) == {"%s.weight" % linear_keyword, "%s.bias" % linear_keyword}
+    msg = backbone.load_state_dict(state_dict, strict=False)#
+    assert set(msg.missing_keys) == {"%s.weight" % linear_keyword, "%s.bias" % linear_keyword}, f"Missing keys: {msg.missing_keys}"
     return backbone
 
 def save_checkpoint(state, filename='checkpoint.pth.tar'):
