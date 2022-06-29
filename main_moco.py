@@ -157,7 +157,7 @@ parser.add_argument('--output-dir', default='.', type=str,
                     help='Output path. Default is current path.')
 
 # deeplab
-parser.add_argument("--output_stride", type=int, default=16, choices=[8, 16],
+parser.add_argument("--output-stride", type=int, default=16, choices=[8, 16],
                     help="This option is valid for only resnet backbones.")
 
 def main():
