@@ -616,20 +616,31 @@ def adjust_moco_momentum(epoch, args):
     return m
 
 def load_moco_backbone(backbone:nn.Module,args):
+    linear_keyword='fc'
     #load state_dict
     checkpoint = torch.load(args.pretrained, map_location="cpu")
-    # rename moco pre-trained keys
-    state_dict = checkpoint['state_dict']
-    for k in list(state_dict.keys()):
-        # retain only base_encoder up to before the embedding layer
-        if k.startswith('module.'):# and not k.startswith('module.base_encoder.%s' % linear_keyword)
-            # remove prefix
-            state_dict[k[len("module."):]] = state_dict[k]
-        # delete renamed or unused k
-        del state_dict[k]
+    if args.arch=='resnet50': 
+        # rename moco pre-trained keys
+        state_dict = checkpoint['state_dict']
+        for k in list(state_dict.keys()):
+            # retain only base_encoder up to before the embedding layer
+            if k.startswith('module.'):# and not k.startswith('module.base_encoder.%s' % linear_keyword)
+                # remove prefix
+                state_dict[k[len("module."):]] = state_dict[k]
+            # delete renamed or unused k
+            del state_dict[k]
+    else: # resnet101
+        # rename pretained layers
+        state_dict = checkpoint
+        for k in list(state_dict.keys()):
+            if k.startswith(linear_keyword): continue
+            state_dict['base_encoder.'+k] = state_dict[k]
+            state_dict['momentum_encoder.'+k] = state_dict[k]
+            # delete renamed or unused k
+            del state_dict[k]
     args.start_epoch = 0
-    backbone.load_state_dict(state_dict)#, strict=False
-    # assert set(msg.missing_keys) == {"%s.weight" % linear_keyword, "%s.bias" % linear_keyword}
+    msg = backbone.load_state_dict(state_dict, strict=False)#
+    # assert set(msg.missing_keys) == {"%s.weight" % linear_keyword, "%s.bias" % linear_keyword}, f"Missing keys: {msg.missing_keys}" # comment out this line to debug
     return backbone
 
 def download_preweights(list_url, download_path, key):
