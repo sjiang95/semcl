@@ -328,12 +328,9 @@ def main_worker(gpu, ngpus_per_node, args):
     elif args.gpu is not None:
         torch.cuda.set_device(args.gpu)
         model = model.cuda(args.gpu)
-        # comment out the following line for debugging
-        raise NotImplementedError("Only DistributedDataParallel is supported.")
     else:
         # AllGather/rank implementation in this code only supports DistributedDataParallel.
-        raise NotImplementedError("Only DistributedDataParallel is supported.")
-    # print(model) # print model after SyncBatchNorm
+        raise NotImplementedError("You have to either use DistributedDataParallel or specify one GPU by `--gpu`.")
 
     if args.optimizer == 'lars':
         optimizer = moco.optimizer.LARS(model.parameters(), args.lr,
