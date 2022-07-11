@@ -599,7 +599,16 @@ class ExtRandomGrayscale(torch.nn.Module):
         Returns:
             PIL Image or Tensor: Randomly grayscaled image.
         """
-        num_output_channels = F._get_image_num_channels(anchor)
+        # `_get_image_size` is changed to `get_image_size` in the following PR
+        # https://github.com/pytorch/vision/pull/4321
+        # and merged in the following release
+        # https://github.com/pytorch/vision/releases?q=%234321&expanded=true
+        try:
+            num_output_channels = F._get_image_num_channels(anchor)
+        except AttributeError:
+            num_output_channels = F.get_image_num_channels(anchor)
+        else:
+            pass
         if torch.rand(1) < self.p:
             return F.rgb_to_grayscale(anchor, num_output_channels=num_output_channels), F.rgb_to_grayscale(nanchor, num_output_channels=num_output_channels)
         return anchor, nanchor
@@ -728,7 +737,16 @@ class ExtRandomResizedCrop(torch.nn.Module):
             tuple: params (i, j, h, w) to be passed to ``crop`` for a random
             sized crop.
         """
-        width, height = F._get_image_size(img)
+        # `_get_image_size` is changed to `get_image_size` in the following PR
+        # https://github.com/pytorch/vision/pull/4321
+        # and merged in the following release
+        # https://github.com/pytorch/vision/releases?q=%234321&expanded=true
+        try:
+            width, height = F._get_image_size(img)
+        except AttributeError:
+            width, height = F.get_image_size(img)
+        else:
+            pass
         area = height * width
 
         log_ratio = torch.log(torch.tensor(ratio))
