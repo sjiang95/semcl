@@ -192,7 +192,7 @@ def main():
     elif args.iters is None and args.epochs is None:
         args.iters=30000
         print(f"Neither `--iters` nor `--epochs` is given, set total iterations to {args.iters}")
-        args.iter_mode='epochs'
+        args.iter_mode='iters'
 
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
 
