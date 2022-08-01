@@ -62,7 +62,7 @@ pretrained_weight_url={
 }
 
 parser = argparse.ArgumentParser(description='SemCL Pre-Training')
-parser.add_argument('data', metavar='DIR',
+parser.add_argument('dataroot', metavar='DIR',
                     help='path to dataset')
 parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet50',
                     choices=model_names,
@@ -144,7 +144,7 @@ parser.add_argument('--crop-min', default=0.08, type=float,
                     help='minimum scale for random cropping (default: 0.08)')
                     
 # choose datasets to load
-parser.add_argument('--choose-dataset', default=['coco', 'ade'], nargs='+',
+parser.add_argument('--dataset', default=['coco', 'ade'], nargs='+',
                     help='arbitrary combine coco, ade20k and voc2012 datasets')
 
 # choose negative mode
@@ -342,7 +342,7 @@ def main_worker(gpu, ngpus_per_node, args):
         
     scaler = torch.cuda.amp.GradScaler()
 
-    list_datasets=args.choose_dataset
+    list_datasets=args.dataset
     dataset_str=""
     for i,dataset in enumerate(list_datasets):
         if i==len(list_datasets)-1:
@@ -375,7 +375,7 @@ def main_worker(gpu, ngpus_per_node, args):
     cudnn.benchmark = True
 
     # Data loading code
-    traindir = args.data
+    traindir = args.dataroot
     normalize = et.ExtNormalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
     print(f"Crop size: {args.cropsize}")
