@@ -1,24 +1,16 @@
 import argparse
-from unicodedata import name
-from functools import partial
 from torchinfo import summary
 import os
 
 import torch
 import torch.nn as nn
 import torch.nn.parallel
-import torch.backends.cudnn as cudnn
-import torch.distributed as dist
 import torch.optim
-import torch.multiprocessing as mp
 import torch.utils.data
 import torch.utils.data.distributed
-import torchvision.transforms as transforms
-import torchvision.datasets as datasets
 import torchvision.models as torchvision_models
 
 import swin_transformer
-from swin_transformer import SwinTransformer
 
 torchvision_model_names = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
@@ -42,14 +34,19 @@ parser.add_argument('--summary-only', action='store_true',
 
 def load_moco_backbone(backbone:nn.Module, linear_keyword,args):
     #load state_dict
-    checkpoint = torch.load(args.full_ckpt, map_location="cpu")
+    checkpoint = torch.load(args.full_ckpt, map_location="cuda" if torch.cuda.is_available() else "cpu")
     # rename moco pre-trained keys
     state_dict = checkpoint['state_dict']
     for k in list(state_dict.keys()):
         # retain only base_encoder up to before the embedding layer
+        # For ddp models, they are wrapped by 'module.'
         if k.startswith('module.base_encoder') and not k.startswith('module.base_encoder.%s' % linear_keyword):
             # remove prefix
             state_dict[k[len("module.base_encoder."):]] = state_dict[k]
+        # Otherwise, the ckpt dict starts with 'base_encoder'
+        elif k.startswith('base_encoder') and not k.startswith('base_encoder.%s' % linear_keyword):
+            # remove prefix
+            state_dict[k[len("base_encoder."):]] = state_dict[k]
         # delete renamed or unused k
         del state_dict[k]
     msg = backbone.load_state_dict(state_dict, strict=False)#
@@ -71,14 +68,13 @@ def moco2bkb():
     assert (len(args.full_ckpt)>0), "You have to specify pretrained ckpt path."
     # check existence of full ckpt
     assert (os.path.isfile(args.full_ckpt)), f"Given full checkpoint at {args.full_ckpt} does not exist."
+    print(f"Extracting backbone from pretrained checkpoint {args.full_ckpt}.")
 
     # This is valid for only resnet models
     if args.output_stride==8:
         replace_stride_with_dilation=[False, True, True]
-        # aspp_dilate = [12, 24, 36]
     else:
         replace_stride_with_dilation=[False, False, True]
-        # aspp_dilate = [6, 12, 18]
     # create model
     print("=> creating model '{}'".format(args.arch))
     if args.arch.startswith('swin'):
@@ -97,7 +93,7 @@ def moco2bkb():
         print("In 'summary_only' mode, backbone will not be saved.")
     else:
         slash_idx=str(args.full_ckpt).rfind('/')
-        bkb_filename=str(args.full_ckpt)[:slash_idx+1]+"bkb_"+str(args.full_ckpt)[slash_idx+1:]
+        bkb_filename=os.path.join(os.path.dirname(args.full_ckpt),"bkb_"+os.path.basename(args.full_ckpt))
         save_checkpoint(
             {'state_dict': model.state_dict(),}
             ,filename=bkb_filename)
