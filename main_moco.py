@@ -1,11 +1,5 @@
 #!/usr/bin/env python
 
-# Copyright (c) Facebook, Inc. and its affiliates.
-# All rights reserved.
-
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-
 import argparse
 import builtins
 import math
@@ -19,7 +13,6 @@ import warnings
 from functools import partial
 import multiprocessing
 import requests
-from secretstorage import Item
 
 import torch
 import torch.nn as nn
@@ -39,9 +32,7 @@ import moco.builder
 import moco.loader
 import moco.optimizer
 
-# import vits
 import swin_transformer
-from swin_transformer import SwinTransformer
 
 from load_custom_data import CustomImageDataset
 from utils import ext_transforms as et
