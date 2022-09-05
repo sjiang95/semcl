@@ -187,6 +187,8 @@ def main():
 
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
 
+    assert args.distributed, "SyncBN depends on distributed training. If you really want to continue, comment out this line and take the risk of poor reults."
+
     ngpus_per_node = torch.cuda.device_count()
 
     # Retrieve pretrained weights
