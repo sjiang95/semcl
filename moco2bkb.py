@@ -51,6 +51,8 @@ def load_moco_backbone(backbone:nn.Module, linear_keyword,args):
         del state_dict[k]
     msg = backbone.load_state_dict(state_dict, strict=False)#
     assert set(msg.missing_keys) == {"%s.weight" % linear_keyword, "%s.bias" % linear_keyword}, f"Missing keys: {msg.missing_keys}"
+    # It's fine to ignore above missing keys warning
+    # see https://github.com/SwinTransformer/Swin-Transformer-Object-Detection/issues/124#issuecomment-992111842
     return backbone
 
 def save_checkpoint(state, filename='checkpoint.pth.tar'):
