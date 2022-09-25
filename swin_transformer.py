@@ -14,6 +14,7 @@ __all__ = [
     'swin_tiny', 
     'swin_small', 
     'swin_base',
+    'swin_large',
 ]
 
 class Mlp(nn.Module):
@@ -607,6 +608,14 @@ def swin_small(pretrained:str='',**kwargs):
 
 def swin_base(pretrained:str='',**kwargs):
     model=SwinTransformer(num_classes=21841, drop_path_rate=0.2,embed_dim=128,depths=[ 2, 2, 18, 2 ],num_heads=[ 4, 8, 16, 32 ],window_size=7) #for 22k model, the num_class is 21841
+    if len(pretrained)>0:
+        swin_ckpt = torch.load(pretrained, map_location="cpu")
+        swin_state_dict = swin_ckpt['model']
+        model.load_state_dict(swin_state_dict)
+    return model
+
+def swin_large(pretrained:str='',**kwargs):
+    model=SwinTransformer(num_classes=21841, drop_path_rate=0.2,embed_dim=192,depths=[ 2, 2, 18, 2 ],num_heads=[ 6, 12, 24, 48 ],window_size=7) #for 22k model, the num_class is 21841
     if len(pretrained)>0:
         swin_ckpt = torch.load(pretrained, map_location="cpu")
         swin_state_dict = swin_ckpt['model']

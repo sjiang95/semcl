@@ -42,7 +42,7 @@ torchvision_model_names = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
     and callable(torchvision_models.__dict__[name]))
 
-model_names = ['swin_tiny', 'swin_small', 'swin_base'] + torchvision_model_names
+model_names = ['swin_tiny', 'swin_small', 'swin_base', 'swin_large'] + torchvision_model_names
 
 pretrained_weight_url={
     'resnet50': 'https://dl.fbaipublicfiles.com/moco-v3/r-50-1000ep/r-50-1000ep.pth.tar',
@@ -50,6 +50,7 @@ pretrained_weight_url={
     'swin_tiny': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.8/swin_tiny_patch4_window7_224_22k.pth', 
     'swin_small': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.8/swin_small_patch4_window7_224_22k.pth', 
     'swin_base': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_base_patch4_window7_224_22k.pth',
+    'swin_large':'https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_large_patch4_window7_224_22k.pth',
 }
 
 parser = argparse.ArgumentParser(description='SemCL Pre-Training')
