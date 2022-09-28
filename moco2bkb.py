@@ -15,7 +15,7 @@ import swin_transformer
 torchvision_model_names = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
     and callable(torchvision_models.__dict__[name]))
-model_names = ['swin_tiny', 'swin_small', 'swin_base'] + torchvision_model_names
+model_names = ['swin_tiny', 'swin_small', 'swin_base', 'swin_large'] + torchvision_model_names
 
 parser = argparse.ArgumentParser(description='MoCo ImageNet Pre-Training')
 parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet50',
