@@ -75,11 +75,13 @@ parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
 parser.add_argument('--cropsize', default=224, type=int, metavar='N',
                     help='image crop size. Swin dopted 224*224.')
-parser.add_argument('-b', '--batch-size', default=4096, type=int,
+parser.add_argument('-b', '--batch-size', default=64, type=int,
                     metavar='N',
-                    help='mini-batch size (default: 4096), this is the total '
+                    help='mini-batch size (default: 64), this is the total '
                          'batch size of all GPUs on all nodes when '
                          'using Data Parallel or Distributed Data Parallel')
+parser.add_argument('--grad-accum',default=1,type=int,
+                    help='accumulation steps. Equivalent batch size would be batch_size*grad_accum.')
 parser.add_argument('--lr', '--learning-rate', default=0.6, type=float,
                     metavar='LR', help='initial (base) learning rate', dest='lr')
 parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
@@ -292,11 +294,12 @@ def main_worker(gpu, ngpus_per_node, args):
             args.moco_dim, args.moco_mlp_dim, args.moco_t, args.loss_mode)
         model=load_moco_backbone(model,args=args)
 
-    # infer learning rate before changing batch size
-    args.lr = args.lr * args.batch_size / 256
-
     # store total batch_size 
-    total_batch_size=args.batch_size
+    # equivalent total_batch_size=args.batch_size*grad_accum
+    total_batch_size=args.batch_size*args.grad_accum
+
+    # infer learning rate before changing batch size
+    args.lr = args.lr * total_batch_size / 256
 
     if not torch.cuda.is_available():
         print('using CPU, this will be slow')
@@ -432,9 +435,12 @@ def main_worker(gpu, ngpus_per_node, args):
 
     iters_per_epoch = len(train_loader)
 
+    # The total epochs (iterations) should be extend for {args.grad_accum} times, since we do one optimizer step every {args.grad_accum} iters.
     if args.epochs is None:
+        args.iters*=args.grad_accum
         args.epochs=math.ceil(args.iters/iters_per_epoch)
     else: # use the set epoch to calculate total iters
+        args.epochs*=args.grad_accum
         args.iters=args.epochs*iters_per_epoch
 
     if args.warmup_iters is None:
@@ -457,7 +463,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 and args.rank == 0): # only the first GPU saves checkpoint
             ckpt_filename=('ckpt/%s/%s/%s/batchsize%04d/%s_%s_%s_ecd%04dep%05ditbatchsize%04d_crop%d.pth.tar' % (
             dataset_str,args.arch,args.loss_mode, total_batch_size, 
-            dataset_str,args.arch,args.loss_mode, args.epochs,args.iters,total_batch_size,args.cropsize))
+            dataset_str,args.arch,args.loss_mode, args.epochs/args.grad_accum,args.iters/args.grad_accum,total_batch_size,args.cropsize))
             full_filename=os.path.join(args.output_dir, ckpt_filename)
             save_checkpoint({
                 'epoch': epoch + 1,
@@ -519,17 +525,20 @@ def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):
 
         # compute output
         with torch.cuda.amp.autocast(True):
-            loss = model(anchor_images, nanchor_images, moco_m)
+            loss = model(anchor_images, nanchor_images, moco_m) / args.grad_accum   # Normalize our loss (if averaged). See https://gist.github.com/thomwolf/ac7a7da6b1888c2eeac8ac8b9b05d3d3#file-gradient_accumulation-py-L5.
 
         losses.update(loss.item(), anchor_images[0].size(0))
         if args.rank == 0:
             summary_writer.add_scalar("loss", loss.item(), epoch * iters_per_epoch + i)
 
-        # compute gradient and do SGD step
-        optimizer.zero_grad()
+        # compute gradient and do step
+        # optimizer.zero_grad()                         # If we reset gradients tensors here, the gradients will never accumulate.
         scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
+        if (i+1) % args.grad_accum == 0:                # Wait for several backward steps
+            # optimizer.step()                            # optimizer.step() should not be called when amp is applied. See https://discuss.pytorch.org/t/ddp-amp-gradient-accumulation-calling-optimizer-step-leads-to-nan-loss/162624.
+            scaler.step(optimizer)
+            scaler.update()
+            optimizer.zero_grad()                           # Reset gradients tensors only if we have done a step. See https://gist.github.com/thomwolf/ac7a7da6b1888c2eeac8ac8b9b05d3d3?permalink_comment_id=2921188#gistcomment-2921188. And https://pytorch.org/docs/stable/notes/amp_examples.html#gradient-accumulation.
 
         # measure elapsed time
         batch_time.update(time.time() - end)
