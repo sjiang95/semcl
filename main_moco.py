@@ -481,7 +481,7 @@ def main_worker(gpu, ngpus_per_node, args):
         epoch_dur=(epoch_end-epoch_start).total_seconds()
         accumulate_epoch_dur+=epoch_dur
         print(f"Epoch {epoch}/{args.epochs} takes {str(epoch_end-epoch_start)}.")
-        eta=timedelta(seconds=accumulate_epoch_dur/((epoch+1)*iters_per_epoch)*(args.iters-1-(epoch+1)*iters_per_epoch)) + datetime.now(get_localzone())
+        eta=timedelta(seconds=accumulate_epoch_dur/((epoch+1-args.start_epoch)*iters_per_epoch)*(args.iters-1-(epoch+1)*iters_per_epoch)) + datetime.now(get_localzone())
         print(f"[ETA] {eta}")
         print()
 
