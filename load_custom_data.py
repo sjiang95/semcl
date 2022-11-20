@@ -55,7 +55,7 @@ class CustomImageDataset(Dataset):
         self.target_transform = target_transform
 
     def __len__(self):
-        return len(self.img_df)
+        return len(self.paired_samples)
 
     def __getitem__(self, idx):
         rel_anchor_img_path, rel_nanchor_img_path = self.paired_samples[idx].split(',')
