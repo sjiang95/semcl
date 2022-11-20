@@ -54,7 +54,7 @@ pretrained_weight_url={
 }
 
 parser = argparse.ArgumentParser(description='SemCL Pre-Training')
-parser.add_argument('dataroot', metavar='DIR',
+parser.add_argument('--dataroot', metavar='DIR', default='data',
                     help='path to dataset')
 parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet50',
                     choices=model_names,
