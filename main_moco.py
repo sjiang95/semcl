@@ -272,13 +272,6 @@ def main_worker(gpu, ngpus_per_node, args):
     else:
         print("Checkpoints will be written to %s." % (args.output_dir))
 
-    # This is valid for only resnet models
-    if args.output_stride==8:
-        replace_stride_with_dilation=[False, True, True]
-        # aspp_dilate = [12, 24, 36]
-    else:
-        replace_stride_with_dilation=[False, False, True]
-        # aspp_dilate = [6, 12, 18]
     # create model
     print("=> creating model '{}'".format(args.arch))
     if args.arch.startswith('swin'):
@@ -288,7 +281,16 @@ def main_worker(gpu, ngpus_per_node, args):
             partial(swin_transformer.__dict__[args.arch],pretrained=args.pretrained), 
             args.moco_dim, args.moco_mlp_dim, args.moco_t, args.loss_mode
         )
+        args.output_stride==None
     else:
+        if args.output_stride==8:
+            replace_stride_with_dilation=[False, True, True]
+            # aspp_dilate = [12, 24, 36]
+        elif args.output_stride==16:
+            replace_stride_with_dilation=[False, False, True]
+            # aspp_dilate = [6, 12, 18]
+        else:
+            raise ValueError(f"The options '--output-stride' support only 8 or 16, but got {args.output_stride}.")
         model = moco.builder.MoCo_ResNet(
             partial(torchvision_models.__dict__[args.arch], zero_init_residual=True,replace_stride_with_dilation=replace_stride_with_dilation), 
             args.moco_dim, args.moco_mlp_dim, args.moco_t, args.loss_mode)
@@ -462,9 +464,7 @@ def main_worker(gpu, ngpus_per_node, args):
         
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                 and args.rank == 0): # only the first GPU saves checkpoint
-            ckpt_filename=('ckpt/%s/%s/%s/batchsize%04d/%s_%s_%s_ecd%04dep%05ditbatchsize%04d_crop%d.pth.tar' % (
-            dataset_str,args.arch,args.loss_mode, total_batch_size, 
-            dataset_str,args.arch,args.loss_mode, args.epochs/args.grad_accum,args.iters/args.grad_accum,total_batch_size,args.cropsize))
+            ckpt_filename=(f"ckpt/{dataset_str}/{args.arch}/{args.loss_mode}/batchsize{total_batch_size:04d}/{dataset_str}_{args.arch}{'os'+str(args.output_stride) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{args.epochs/args.grad_accum:04d}ep{args.iters/args.grad_accum:05d}itbatchsize{total_batch_size:04d}_crop{args.cropsize}.pth.tar")
             full_filename=os.path.join(args.output_dir, ckpt_filename)
             save_checkpoint({
                 'epoch': epoch + 1,
