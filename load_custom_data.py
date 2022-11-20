@@ -7,10 +7,11 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 class CustomImageDataset(Dataset):
     def __init__(self, img_dir, transform=None, target_transform=None, datasets=['coco', 'ade', 'voc']):
+        self.img_dir = img_dir
         self.paired_samples=[]
         for OneDataset in datasets:
             if OneDataset=='voc':
-                sample_list_file=os.path.join(img_dir,"VOC_ImgList.txt")
+                sample_list_file=os.path.join(self.img_dir,"VOC_ImgList.txt")
                 voc_sample_list=open(sample_list_file,'r')
                 count=0
                 for oneLine in voc_sample_list.readlines():
@@ -19,7 +20,7 @@ class CustomImageDataset(Dataset):
                     count+=1
                 print(f"{count} VOC2012 pairs added.")
             elif OneDataset=='coco':
-                sample_list_file=os.path.join(img_dir,"COCO_ImgList.txt")
+                sample_list_file=os.path.join(self.img_dir,"COCO_ImgList.txt")
                 COCO_sample_list=open(sample_list_file,'r')
                 count=0
                 for oneLine in COCO_sample_list.readlines():
@@ -28,7 +29,7 @@ class CustomImageDataset(Dataset):
                     count+=1
                 print(f"{count} COCO pairs added.")
             elif OneDataset=='ade':
-                sample_list_file=os.path.join(img_dir,"ADE_ImgList.txt")
+                sample_list_file=os.path.join(self.img_dir,"ADE_ImgList.txt")
                 ADE_sample_list=open(sample_list_file,'r')
                 count=0
                 for oneLine in ADE_sample_list.readlines():
@@ -37,7 +38,7 @@ class CustomImageDataset(Dataset):
                     count+=1
                 print(f"{count} ADE20K pairs added.")
             elif OneDataset=='city':
-                sample_list_file=os.path.join(img_dir,"Cityscapes_ImgList.txt")
+                sample_list_file=os.path.join(self.img_dir,"Cityscapes_ImgList.txt")
                 City_sample_list=open(sample_list_file,'r')
                 count=0
                 for oneLine in City_sample_list.readlines():
@@ -50,7 +51,6 @@ class CustomImageDataset(Dataset):
         
         print("%d samples will be used." % len(self.paired_samples))
 
-        self.img_dir = img_dir
         self.transform = transform
         self.target_transform = target_transform
 
