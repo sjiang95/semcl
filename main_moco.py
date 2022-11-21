@@ -151,7 +151,7 @@ parser.add_argument('--output-dir', default='.', type=str,
                     help='Output path. Default is current path.')
 
 # deeplab
-parser.add_argument("--output-stride", type=int, default=8, choices=[8, 16],
+parser.add_argument("--output-stride", default=None, choices=[None, 8, 16],
                     help="This option is valid for only resnet backbones.")
 
 def main():
@@ -283,14 +283,15 @@ def main_worker(gpu, ngpus_per_node, args):
         )
         args.output_stride==None
     else:
-        if args.output_stride==8:
+        print(f"output_stride is {args.output_stride}.")
+        if args.output_stride==8: # from deeplabv3plus. See https://github.com/VainF/DeepLabV3Plus-Pytorch/blob/4e1087de98bc49d55b9239ae92810ef7368660db/network/modeling.py#L34.
             replace_stride_with_dilation=[False, True, True]
-            # aspp_dilate = [12, 24, 36]
         elif args.output_stride==16:
             replace_stride_with_dilation=[False, False, True]
-            # aspp_dilate = [6, 12, 18]
+        elif args.output_stride==None: # default resnet. See https://github.com/pytorch/vision/blob/5b4f79d9ba8cbeeb8d6f0fbba3ba5757b718888b/torchvision/models/resnet.py#L186.
+            replace_stride_with_dilation=None
         else:
-            raise ValueError(f"The options '--output-stride' support only 8 or 16, but got {args.output_stride}.")
+            raise ValueError(f"The options '--output-stride' support only None, 8 or 16, but got {args.output_stride} of type {type(args.output_stride)}.")
         model = moco.builder.MoCo_ResNet(
             partial(torchvision_models.__dict__[args.arch], zero_init_residual=True,replace_stride_with_dilation=replace_stride_with_dilation), 
             args.moco_dim, args.moco_mlp_dim, args.moco_t, args.loss_mode)
@@ -464,7 +465,7 @@ def main_worker(gpu, ngpus_per_node, args):
         
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                 and args.rank == 0): # only the first GPU saves checkpoint
-            ckpt_filename=(f"ckpt/{dataset_str}/{args.arch}/{args.loss_mode}/batchsize{total_batch_size:04d}/{dataset_str}_{args.arch}{'os'+str(args.output_stride) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{args.epochs/args.grad_accum:04d}ep{args.iters/args.grad_accum:05d}itbatchsize{total_batch_size:04d}_crop{args.cropsize}.pth.tar")
+            ckpt_filename=(f"ckpt/{dataset_str}/{args.arch}/{args.loss_mode}/batchsize{total_batch_size:04d}/{dataset_str}_{args.arch}{('os'+str(args.output_stride)) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{int(args.epochs/args.grad_accum):04d}ep{int(args.iters/args.grad_accum):05d}itbatchsize{total_batch_size:04d}_crop{args.cropsize}.pth.tar")
             full_filename=os.path.join(args.output_dir, ckpt_filename)
             save_checkpoint({
                 'epoch': epoch + 1,
