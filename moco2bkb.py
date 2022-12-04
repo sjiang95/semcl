@@ -32,7 +32,7 @@ parser.add_argument('--summary-only', action='store_true',
 
 def load_moco_backbone(backbone:nn.Module, linear_keyword,args):
     #load state_dict
-    checkpoint = torch.load(args.full_ckpt, map_location="cuda" if torch.cuda.is_available() else "cpu")
+    checkpoint = torch.load(args.full_ckpt, map_location= "cpu")
     # rename moco pre-trained keys
     state_dict = checkpoint['state_dict']
     for k in list(state_dict.keys()):
@@ -61,7 +61,9 @@ def save_checkpoint(state, filename='checkpoint.pth.tar'):
     torch.save(state, filename)
 
 def moco2bkb():
-    # use this function to extract base encoder backbone from pretrained weights
+    r"""moco2bkb
+    Use this function to extract base encoder backbone from pretrained weights
+    """
     args = parser.parse_args()
 
     # Retrieve pretrained weights
@@ -86,15 +88,13 @@ def moco2bkb():
             replace_stride_with_dilation=[False, False, True]
         else: # default resnet. See https://github.com/pytorch/vision/blob/5b4f79d9ba8cbeeb8d6f0fbba3ba5757b718888b/torchvision/models/resnet.py#L186.
             replace_stride_with_dilation=None
-        else:
-            raise ValueError(f"The options '--output-stride' support only None, 8 or 16, but got {args.output_stride} of type {type(args.output_stride)}.")
         model = torchvision_models.__dict__[args.arch]( zero_init_residual=True,replace_stride_with_dilation=replace_stride_with_dilation)
         linear_keyword = 'fc'
         model=load_moco_backbone(model,linear_keyword=linear_keyword,args=args)
 
-    summary(model,input_size=(1,3,224,224))
+    summary(model,input_size=(1,3,224,224),device="cpu")
     if args.summary_only:
-        print("In 'summary_only' mode, backbone will not be saved.")
+        print("In 'summary_only' mode, no checkpoint will be saved.")
     else:
         slash_idx=str(args.full_ckpt).rfind('/')
         bkb_filename=os.path.join(os.path.dirname(args.full_ckpt),"bkb_"+os.path.basename(args.full_ckpt))
