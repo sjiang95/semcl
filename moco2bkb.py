@@ -23,10 +23,8 @@ parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet50',
                     help='model architecture: ' +
                         ' | '.join(model_names) +
                         ' (default: resnet50)')
-# deeplab
-parser.add_argument("--output-stride", type=int, default=None, choices=[None, 8, 16],
-                    help="This option is valid for only resnet backbones.")
-
+parser.add_argument("--output-stride", type=int, default=-1, choices=[-1, 8, 16],
+                    help="This option is valid for only resnet backbones. -1: no output stride (default resnets).")
 parser.add_argument('full_ckpt',default='',type=str, metavar='PATH',
                     help="Path to pretrained weights having same architecture with --arch option.")
 parser.add_argument('--summary-only', action='store_true',
@@ -81,12 +79,12 @@ def moco2bkb():
         linear_keyword = 'head'
         model=load_moco_backbone(model,linear_keyword=linear_keyword,args=args)
     else:
-        print(f"output_stride is {args.output_stride}.")
+        print(f"output_stride is {args.output_stride if args.output_stride==8 or args.output_stride==16 else None}.")
         if args.output_stride==8: # from deeplabv3plus. See https://github.com/VainF/DeepLabV3Plus-Pytorch/blob/4e1087de98bc49d55b9239ae92810ef7368660db/network/modeling.py#L34.
             replace_stride_with_dilation=[False, True, True]
         elif args.output_stride==16:
             replace_stride_with_dilation=[False, False, True]
-        elif args.output_stride==None: # default resnet. See https://github.com/pytorch/vision/blob/5b4f79d9ba8cbeeb8d6f0fbba3ba5757b718888b/torchvision/models/resnet.py#L186.
+        else: # default resnet. See https://github.com/pytorch/vision/blob/5b4f79d9ba8cbeeb8d6f0fbba3ba5757b718888b/torchvision/models/resnet.py#L186.
             replace_stride_with_dilation=None
         else:
             raise ValueError(f"The options '--output-stride' support only None, 8 or 16, but got {args.output_stride} of type {type(args.output_stride)}.")
