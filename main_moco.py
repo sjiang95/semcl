@@ -142,9 +142,9 @@ parser.add_argument('--dataset', default=['coco', 'ade', 'voc'], nargs='+',
                     help='arbitrary combine coco, ade20k and voc2012 datasets')
 
 # choose negative mode
-parser.add_argument('--loss-mode', default='', type=str,
-                    choices=['L', 'L0', 'mocov3'],
-                    help='Determines how the (optional) negative_keys are handled. Value must be one of ["paired", "unpaired"].')
+parser.add_argument('--loss-mode', default='paired', type=str,
+                    choices=['paired', 'mocov3'],
+                    help='Determines how the (optional) negative_keys are handled. Value must be one of ["paired", "mocov3"], where the latter means original infoNCE loss.')
 
 # set checkpoints output dir
 parser.add_argument('--output-dir', default='.', type=str,
@@ -255,12 +255,10 @@ def main_worker(gpu, ngpus_per_node, args):
         print("[DDP] init_process_group() is initialized via backend:", dist.get_backend())
         dist.barrier()
 
-    if args.loss_mode=='L':
-        print("Loss mode: L=L0+loss_mocov3")
-    elif args.loss_mode=='L0':
-        print("Loss mode: L0")
+    if args.loss_mode=='paired':
+        print("Loss mode: pair-wise infoNCE")
     elif args.loss_mode=='mocov3':
-        print("Loss mode: mocov3")
+        print("Loss mode: mocov3(infoNCE)")
     elif len(args.loss_mode)==0:
         print("Loss mode: test")
         args.loss_mode='test'
