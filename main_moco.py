@@ -34,7 +34,7 @@ import moco.optimizer
 
 import swin_transformer
 
-from load_custom_data import CustomImageDataset
+from semclData import semclDataset
 from utils import ext_transforms as et
 
 
@@ -138,7 +138,7 @@ parser.add_argument('--crop-min', default=0.08, type=float,
                     help='minimum scale for random cropping (default: 0.08)')
                     
 # choose datasets to load
-parser.add_argument('--dataset', default=['coco', 'ade'], nargs='+',
+parser.add_argument('--dataset', default=['coco', 'ade', 'voc'], nargs='+',
                     help='arbitrary combine coco, ade20k and voc2012 datasets')
 
 # choose negative mode
@@ -419,7 +419,7 @@ def main_worker(gpu, ngpus_per_node, args):
         normalize
     ]
 
-    train_dataset=CustomImageDataset(traindir,
+    train_dataset=semclDataset(traindir,
                                     transform= moco.loader.TwoCropsTransformWithItself(
                                     et.ExtCompose(augmentation0),
                                     et.ExtCompose(augmentation1),

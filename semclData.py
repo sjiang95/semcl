@@ -5,7 +5,7 @@ from PIL import Image, ImageFile
 # Add the following line to fix a pillow error
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-class CustomImageDataset(Dataset):
+class semclDataset(Dataset):
     def __init__(self, img_dir, transform=None, target_transform=None, datasets=['coco', 'ade', 'voc']):
         self.img_dir = img_dir
         self.paired_samples=[]
@@ -47,7 +47,7 @@ class CustomImageDataset(Dataset):
                     count+=1
                 print(f"{count} Cityscapes pairs added.")
             else:
-                raise ValueError("Unrecognize dataset choice.")
+                raise ValueError(f"Unrecognize dataset: {OneDataset}.")
         
         print("%d samples will be used." % len(self.paired_samples))
 
