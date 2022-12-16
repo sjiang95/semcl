@@ -478,7 +478,7 @@ def main_worker(gpu, ngpus_per_node, args):
         assert args.warmup_iters <= forw_backw_iters, f" Warmup iteration({args.warmup_iters}) must be smaller than total forward&backward iterations({forw_backw_iters})."
         print(f"User specified warmup_iters={args.warmup_iters}")
 
-    training_start_ts=time.time()
+    training_start_ts = time.time()
     for epoch in range(args.start_epoch, args.epochs):
         epoch_start = datetime.now()
         print(f"{epoch_start}: Start epoch {epoch}/{args.epochs}.")
@@ -509,11 +509,13 @@ def main_worker(gpu, ngpus_per_node, args):
                 f"{datetime.now()}: Save checkpoint of epoch {epoch} to {os.path.abspath(ckpt_path)}")
 
             epoch_end = datetime.now()
-            print(f"Epoch {epoch}/{args.epochs} takes {epoch_end-epoch_start}.")
+            print(
+                f"Epoch {epoch}/{args.epochs} takes {epoch_end-epoch_start}.")
             epoch_end_ts = time.time()
             # calculate ETA (estimated time of arrival)
-            training_dur=epoch_end_ts-training_start_ts
-            eta=datetime.fromtimestamp(time.time()+training_dur/((epoch+1-args.start_epoch)*iters_per_epoch)*(args.iters-1-(epoch+1)*iters_per_epoch))
+            training_dur = epoch_end_ts-training_start_ts
+            eta = datetime.fromtimestamp(time.time()+training_dur/(
+                (epoch+1-args.start_epoch)*iters_per_epoch)*(args.iters-1-(epoch+1)*iters_per_epoch))
             print(f"[ETA] {eta}, {time.tzname[0]}")
             print()
 
