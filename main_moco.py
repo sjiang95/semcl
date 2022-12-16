@@ -312,11 +312,11 @@ def main_worker(gpu, ngpus_per_node, args):
         model = load_moco_backbone(model, args=args)
 
     # store total batch_size
-    # equivalent total_batch_size=args.batch_size*grad_accum
-    total_batch_size = args.batch_size*args.grad_accum
+    # equivalent equiv_batch_size=args.batch_size*grad_accum
+    equiv_batch_size = args.batch_size*args.grad_accum
 
     # infer learning rate before changing batch size
-    args.lr = args.lr * total_batch_size / 256
+    args.lr = args.lr * equiv_batch_size / 256
 
     if not torch.cuda.is_available():
         print('using CPU, this will be slow')
@@ -367,7 +367,7 @@ def main_worker(gpu, ngpus_per_node, args):
             dataset_str = dataset_str+dataset+"N"
 
     summary_writer_str = ('%s_%s_%s_batchsize%04d' % (
-        dataset_str, args.arch, args.loss_mode, total_batch_size))
+        dataset_str, args.arch, args.loss_mode, equiv_batch_size))
     summary_writer = SummaryWriter(comment=summary_writer_str, filename_suffix=summary_writer_str) if not args.multiprocessing_distributed or (
         args.multiprocessing_distributed and args.rank == 0) else None
 
@@ -495,8 +495,8 @@ def main_worker(gpu, ngpus_per_node, args):
                                      dataset_str,
                                      args.arch,
                                      args.loss_mode,
-                                     f"batchsize{total_batch_size:04d}",
-                                     f"{dataset_str}_{args.arch}{('os'+str(args.output_stride)) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{args.epochs:04d}ep{(args.iters if args.epochs is None else forw_backw_iters/args.grad_accum):05d}itbatchsize{total_batch_size:04d}_crop{args.cropsize}.pth.tar")
+                                     f"batchsize{equiv_batch_size:04d}",
+                                     f"{dataset_str}_{args.arch}{('os'+str(args.output_stride)) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{args.epochs:04d}ep{(args.iters if args.epochs is None else forw_backw_iters/args.grad_accum):05d}itbatchsize{equiv_batch_size:04d}_crop{args.cropsize}.pth.tar")
             save_checkpoint({
                 'epoch': epoch + 1,
                 'arch': args.arch,
