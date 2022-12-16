@@ -39,29 +39,30 @@ from utils import ext_transforms as et
 
 
 torchvision_model_names = sorted(name for name in torchvision_models.__dict__
-    if name.islower() and not name.startswith("__")
-    and callable(torchvision_models.__dict__[name]))
+                                 if name.islower() and not name.startswith("__")
+                                 and callable(torchvision_models.__dict__[name]))
 
-model_names = ['swin_tiny', 'swin_small', 'swin_base', 'swin_large'] + torchvision_model_names
+model_names = ['swin_tiny', 'swin_small', 'swin_base',
+               'swin_large'] + torchvision_model_names
 
-pretrained_weight_url={
+pretrained_weight_url = {
     'resnet50': 'https://dl.fbaipublicfiles.com/moco-v3/r-50-1000ep/r-50-1000ep.pth.tar',
     'resnet101': 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet101_a1h-36d3f2aa.pth',
-    'swin_tiny': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.8/swin_tiny_patch4_window7_224_22k.pth', 
-    'swin_small': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.8/swin_small_patch4_window7_224_22k.pth', 
+    'swin_tiny': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.8/swin_tiny_patch4_window7_224_22k.pth',
+    'swin_small': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.8/swin_small_patch4_window7_224_22k.pth',
     'swin_base': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_base_patch4_window7_224_22k.pth',
-    'swin_large':'https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_large_patch4_window7_224_22k.pth',
+    'swin_large': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_large_patch4_window7_224_22k.pth',
 }
 
 parser = argparse.ArgumentParser(description='SemCL Pre-Training')
 parser.add_argument('--dataroot', metavar='DIR', default='data',
                     help='path to dataset')
 parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet50',
-                    choices=model_names,
+                    type=str, choices=model_names,
                     help='model architecture: ' +
-                        ' | '.join(model_names) +
-                        ' (default: resnet50)')
-parser.add_argument('--pretrained',default='',type=str, metavar='PATH',
+                    ' | '.join(model_names) +
+                    ' (default: resnet50)')
+parser.add_argument('--pretrained', default='', type=str, metavar='PATH',
                     help="Path to pretrained weights having same architecture with --arch option.")
 parser.add_argument('-j', '--workers', default=multiprocessing.cpu_count(), type=int, metavar='N',
                     help='number of data loading workers (default: use multiprocessing.cpu_count() for every GPU)')
@@ -80,7 +81,7 @@ parser.add_argument('-b', '--batch-size', default=64, type=int,
                     help='mini-batch size (default: 64), this is the total '
                          'batch size of all GPUs on all nodes when '
                          'using Data Parallel or Distributed Data Parallel')
-parser.add_argument('--grad-accum',default=1,type=int,
+parser.add_argument('--grad-accum', default=1, type=int,
                     help='accumulation steps. Equivalent batch size would be batch_size*grad_accum.')
 parser.add_argument('--lr', '--learning-rate', default=0.6, type=float,
                     metavar='LR', help='initial (base) learning rate', dest='lr')
@@ -136,7 +137,7 @@ parser.add_argument('--warmup-iters', default=None, type=int, metavar='N',
                     help='number of warmup iters')
 parser.add_argument('--crop-min', default=0.08, type=float,
                     help='minimum scale for random cropping (default: 0.08)')
-                    
+
 # choose datasets to load
 parser.add_argument('--dataset', default=['coco', 'ade', 'voc'], nargs='+',
                     help='arbitrary combine coco, ade20k and voc2012 datasets')
@@ -154,9 +155,10 @@ parser.add_argument('--output-dir', default='.', type=str,
 parser.add_argument("--output-stride", default=None, choices=[None, 8, 16],
                     help="This option is valid for only resnet backbones.")
 
+
 def main():
-    tz_local=get_localzone()
-    start_time=datetime.now(tz_local)
+    tz_local = get_localzone()
+    start_time = datetime.now(tz_local)
     print("{}: Training started.".format(start_time))
     print(f"Use Pytorch {torch.__version__} with cuda {torch.version.cuda}")
     args = parser.parse_args()
@@ -172,21 +174,24 @@ def main():
                       'from checkpoints.')
 
     if args.gpu is not None:
-        warnings.warn('You have chosen a specific GPU. This will completely disable data parallelism.')
+        warnings.warn(
+            'You have chosen a specific GPU. This will completely disable data parallelism.')
 
     if args.dist_url == "env://" and args.world_size == -1:
         args.world_size = int(os.environ["WORLD_SIZE"])
 
     if args.iters is not None and args.epochs is not None:
-        raise AssertionError("You can set either `--iters` or `--epochs`, not both.")
+        raise AssertionError(
+            "You can set either `--iters` or `--epochs`, not both.")
     elif args.iters is not None and args.epochs is None:
-        args.iter_mode='iters'
+        args.iter_mode = 'iters'
     elif args.iters is None and args.epochs is not None:
-        args.iter_mode='epochs'
+        args.iter_mode = 'epochs'
     elif args.iters is None and args.epochs is None:
-        args.iters=30000
-        print(f"Neither `--iters` nor `--epochs` is given, set total iterations to {args.iters}")
-        args.iter_mode='iters'
+        args.iters = 30000
+        print(
+            f"Neither `--iters` nor `--epochs` is given, set total iterations to {args.iters}")
+        args.iter_mode = 'iters'
 
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
 
@@ -195,37 +200,43 @@ def main():
     ngpus_per_node = torch.cuda.device_count()
 
     # Retrieve pretrained weights
-    if len(args.pretrained)==0:
-        pretrained_weights_filename=pretrained_weight_url.copy()
-        for one_key,one_value in pretrained_weights_filename.items():
-            pretrained_weights_filename[one_key]=str(one_value).split(sep='/')[-1]
+    if len(args.pretrained) == 0:
+        pretrained_weights_filename = pretrained_weight_url.copy()
+        for one_key, one_value in pretrained_weights_filename.items():
+            pretrained_weights_filename[one_key] = str(
+                one_value).split(sep='/')[-1]
 
-        path_to_pretrained_weights=os.path.join('pretrained',pretrained_weights_filename[args.arch])
+        path_to_pretrained_weights = os.path.join(
+            'pretrained', pretrained_weights_filename[args.arch])
         if not os.path.exists('pretrained'):
             os.mkdir('pretrained')
-            download_preweights(pretrained_weight_url,path_to_pretrained_weights,args.arch)
+            download_preweights(pretrained_weight_url,
+                                path_to_pretrained_weights, args.arch)
         else:
-            if not os.path.exists(path_to_pretrained_weights): # Download dict file if not exists
-                download_preweights(pretrained_weight_url,path_to_pretrained_weights,args.arch)
-        args.pretrained=path_to_pretrained_weights
+            # Download dict file if not exists
+            if not os.path.exists(path_to_pretrained_weights):
+                download_preweights(pretrained_weight_url,
+                                    path_to_pretrained_weights, args.arch)
+        args.pretrained = path_to_pretrained_weights
         print("Use pretrained weight at", args.pretrained)
 
     if args.multiprocessing_distributed:
         # Since we have ngpus_per_node processes per node, the total world_size
         # needs to be adjusted accordingly
         args.world_size = ngpus_per_node * args.world_size
-        args.workers=args.workers//ngpus_per_node
+        args.workers = args.workers//ngpus_per_node
         # Use torch.multiprocessing.spawn to launch distributed processes: the
         # main_worker process function
-        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
+        mp.spawn(main_worker, nprocs=ngpus_per_node,
+                 args=(ngpus_per_node, args))
     else:
         # Simply call main_worker function
         main_worker(args.gpu, ngpus_per_node, args)
 
-    end_time=datetime.now(tz_local)
+    end_time = datetime.now(tz_local)
     print("{}: Training finished.".format(end_time))
-    train_time_consume=end_time-start_time
-    print("This training process takes ",str(train_time_consume))
+    train_time_consume = end_time-start_time
+    print("This training process takes ", str(train_time_consume))
 
 
 def main_worker(gpu, ngpus_per_node, args):
@@ -237,7 +248,7 @@ def main_worker(gpu, ngpus_per_node, args):
             pass
         builtins.print = print_pass
 
-    if args.multiprocessing_distributed :
+    if args.multiprocessing_distributed:
         print("Use GPU: {} for printing".format(args.gpu))
     elif args.multiprocessing_distributed is False and args.gpu is not None:
         print("Use GPU: {} for traning".format(args.gpu))
@@ -249,23 +260,25 @@ def main_worker(gpu, ngpus_per_node, args):
             # For multiprocessing distributed training, rank needs to be the
             # global rank among all the processes
             args.rank = args.rank * ngpus_per_node + gpu
-        print(f"[DDP] Attempt to initialize init_process_group() via {args.dist_url} with backend {args.dist_backend}")
+        print(
+            f"[DDP] Attempt to initialize init_process_group() via {args.dist_url} with backend {args.dist_backend}")
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                 world_size=args.world_size, rank=args.rank)
-        print("[DDP] init_process_group() is initialized via backend:", dist.get_backend())
+        print("[DDP] init_process_group() is initialized via backend:",
+              dist.get_backend())
         dist.barrier()
 
-    if args.loss_mode=='paired':
+    if args.loss_mode == 'paired':
         print("Loss mode: pair-wise infoNCE")
-    elif args.loss_mode=='mocov3':
+    elif args.loss_mode == 'mocov3':
         print("Loss mode: mocov3(infoNCE)")
-    elif len(args.loss_mode)==0:
+    elif len(args.loss_mode) == 0:
         print("Loss mode: test")
-        args.loss_mode='test'
+        args.loss_mode = 'test'
     else:
         raise ValueError("Unknown loss mode: ", args.loss_mode)
 
-    if args.output_dir=='.':
+    if args.output_dir == '.':
         print("Checkpoints will be written to current folder.")
     else:
         print("Checkpoints will be written to %s." % (args.output_dir))
@@ -275,29 +288,34 @@ def main_worker(gpu, ngpus_per_node, args):
     if args.arch.startswith('swin'):
         # Unlike moco whose pretrained weights contain both base and momentum encoder,
         # swin transformer pretrained weights contains only the backbone (base encoder) itself.
-        model=moco.builder.MoCo_Swin(
-            partial(swin_transformer.__dict__[args.arch],pretrained=args.pretrained), 
+        model = moco.builder.MoCo_Swin(
+            partial(swin_transformer.__dict__[
+                    args.arch], pretrained=args.pretrained),
             args.moco_dim, args.moco_mlp_dim, args.moco_t, args.loss_mode
         )
-        args.output_stride==None
+        args.output_stride == None
     else:
         print(f"output_stride is {args.output_stride}.")
-        if args.output_stride==8: # from deeplabv3plus. See https://github.com/VainF/DeepLabV3Plus-Pytorch/blob/4e1087de98bc49d55b9239ae92810ef7368660db/network/modeling.py#L34.
-            replace_stride_with_dilation=[False, True, True]
-        elif args.output_stride==16:
-            replace_stride_with_dilation=[False, False, True]
-        elif args.output_stride==None: # default resnet. See https://github.com/pytorch/vision/blob/5b4f79d9ba8cbeeb8d6f0fbba3ba5757b718888b/torchvision/models/resnet.py#L186.
-            replace_stride_with_dilation=None
+        # from deeplabv3plus. See https://github.com/VainF/DeepLabV3Plus-Pytorch/blob/4e1087de98bc49d55b9239ae92810ef7368660db/network/modeling.py#L34.
+        if args.output_stride == 8:
+            replace_stride_with_dilation = [False, True, True]
+        elif args.output_stride == 16:
+            replace_stride_with_dilation = [False, False, True]
+        # default resnet. See https://github.com/pytorch/vision/blob/5b4f79d9ba8cbeeb8d6f0fbba3ba5757b718888b/torchvision/models/resnet.py#L186.
+        elif args.output_stride == None:
+            replace_stride_with_dilation = None
         else:
-            raise ValueError(f"The options '--output-stride' support only None, 8 or 16, but got {args.output_stride} of type {type(args.output_stride)}.")
+            raise ValueError(
+                f"The options '--output-stride' support only None, 8 or 16, but got {args.output_stride} of type {type(args.output_stride)}.")
         model = moco.builder.MoCo_ResNet(
-            partial(torchvision_models.__dict__[args.arch], zero_init_residual=True,replace_stride_with_dilation=replace_stride_with_dilation), 
+            partial(torchvision_models.__dict__[
+                    args.arch], zero_init_residual=True, replace_stride_with_dilation=replace_stride_with_dilation),
             args.moco_dim, args.moco_mlp_dim, args.moco_t, args.loss_mode)
-        model=load_moco_backbone(model,args=args)
+        model = load_moco_backbone(model, args=args)
 
-    # store total batch_size 
+    # store total batch_size
     # equivalent total_batch_size=args.batch_size*grad_accum
-    total_batch_size=args.batch_size*args.grad_accum
+    total_batch_size = args.batch_size*args.grad_accum
 
     # infer learning rate before changing batch size
     args.lr = args.lr * total_batch_size / 256
@@ -317,7 +335,8 @@ def main_worker(gpu, ngpus_per_node, args):
             # DistributedDataParallel, we need to divide the batch size
             # ourselves based on the total number of GPUs we have
             args.batch_size = int(args.batch_size / args.world_size)
-            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
+            model = torch.nn.parallel.DistributedDataParallel(
+                model, device_ids=[args.gpu])
         else:
             model.cuda()
             # DistributedDataParallel will divide and allocate batch_size to all
@@ -328,7 +347,8 @@ def main_worker(gpu, ngpus_per_node, args):
         model = model.cuda(args.gpu)
     else:
         # AllGather/rank implementation in this code only supports DistributedDataParallel.
-        raise NotImplementedError("You have to either use DistributedDataParallel or specify one GPU by `--gpu`.")
+        raise NotImplementedError(
+            "You have to either use DistributedDataParallel or specify one GPU by `--gpu`.")
 
     if args.optimizer == 'lars':
         optimizer = moco.optimizer.LARS(model.parameters(), args.lr,
@@ -336,20 +356,22 @@ def main_worker(gpu, ngpus_per_node, args):
                                         momentum=args.momentum)
     elif args.optimizer == 'adamw':
         optimizer = torch.optim.AdamW(model.parameters(), args.lr,
-                                weight_decay=args.weight_decay)
-        
+                                      weight_decay=args.weight_decay)
+
     scaler = torch.cuda.amp.GradScaler()
 
-    list_datasets=args.dataset
-    dataset_str=""
-    for i,dataset in enumerate(list_datasets):
-        if i==len(list_datasets)-1:
-            dataset_str=dataset_str+dataset
+    list_datasets = args.dataset
+    dataset_str = ""
+    for i, dataset in enumerate(list_datasets):
+        if i == len(list_datasets)-1:
+            dataset_str = dataset_str+dataset
         else:
-            dataset_str=dataset_str+dataset+"N"
-    
-    summary_writer_str=('%s_%s_%s_batchsize%04d' % (dataset_str,args.arch,args.loss_mode,total_batch_size))
-    summary_writer = SummaryWriter(comment=summary_writer_str,filename_suffix=summary_writer_str) if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank == 0) else None
+            dataset_str = dataset_str+dataset+"N"
+
+    summary_writer_str = ('%s_%s_%s_batchsize%04d' % (
+        dataset_str, args.arch, args.loss_mode, total_batch_size))
+    summary_writer = SummaryWriter(comment=summary_writer_str, filename_suffix=summary_writer_str) if not args.multiprocessing_distributed or (
+        args.multiprocessing_distributed and args.rank == 0) else None
 
     # optionally resume from a checkpoint
     if args.resume:
@@ -376,10 +398,10 @@ def main_worker(gpu, ngpus_per_node, args):
     # Data loading code
     traindir = args.dataroot
     normalize = et.ExtNormalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])
+                                std=[0.229, 0.224, 0.225])
     print(f"Crop size: {args.cropsize}")
     # directly resize original image for complete semantic information
-    augmentation0=[
+    augmentation0 = [
         et.ExtResize(args.cropsize),
         et.ExtRandomCrop(args.cropsize),
         et.ExtRandomHorizontalFlip(),
@@ -417,75 +439,91 @@ def main_worker(gpu, ngpus_per_node, args):
         normalize
     ]
 
-    train_dataset=semclDataset(traindir,
-                                    transform= moco.loader.TwoCropsTransformWithItself(
-                                    et.ExtCompose(augmentation0),
-                                    et.ExtCompose(augmentation1),
-                                    et.ExtCompose(augmentation2)),
-                                    datasets= list_datasets
-                                    )
+    train_dataset = semclDataset(traindir,
+                                 transform=moco.loader.TwoCropsTransformWithItself(
+                                     et.ExtCompose(augmentation0),
+                                     et.ExtCompose(augmentation1),
+                                     et.ExtCompose(augmentation2)),
+                                 datasets=list_datasets
+                                 )
 
     if args.distributed:
-        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+        train_sampler = torch.utils.data.distributed.DistributedSampler(
+            train_dataset)
     else:
         train_sampler = None
-    
-    print("Use %d workers in torch.utils.data.DataLoader for each GPU." % args.workers)
+
+    print("Use %d workers in torch.utils.data.DataLoader for each GPU." %
+          args.workers)
     train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
+        train_dataset, batch_size=args.batch_size, shuffle=(
+            train_sampler is None),
         num_workers=args.workers, pin_memory=True, sampler=train_sampler, drop_last=True)
 
     iters_per_epoch = len(train_loader)
 
     # The total epochs (iterations) should be extend for {args.grad_accum} times, since we do one optimizer step every {args.grad_accum} iters.
     if args.epochs is None:
-        forw_backw_iters=args.iters*args.grad_accum # forward-backward iteration = update_iter*grad_accum
-        args.epochs=math.ceil(forw_backw_iters/iters_per_epoch)
-    else: # use the set epoch to calculate total iters
-        forw_backw_iters=args.epochs*iters_per_epoch # num epochs is unrelated to grad_accum. The model would be updated for args.epochs*iters_per_epoch/args.grad_accum times.
-    print(f"Model will be updated for {forw_backw_iters/args.grad_accum} iterations ({args.epochs} epochs).")
+        # forward-backward iteration = update_iter*grad_accum
+        forw_backw_iters = args.iters*args.grad_accum
+        args.epochs = math.ceil(forw_backw_iters/iters_per_epoch)
+    else:  # use the set epoch to calculate total iters
+        # num epochs is unrelated to grad_accum. The model would be updated for args.epochs*iters_per_epoch/args.grad_accum times.
+        forw_backw_iters = args.epochs*iters_per_epoch
+    print(
+        f"Model will be updated for {forw_backw_iters/args.grad_accum} iterations ({args.epochs} epochs).")
 
     if args.warmup_iters is None:
-            args.warmup_iters=forw_backw_iters//8
-            print("warmup_iters is not given. Set it to", args.warmup_iters)
+        args.warmup_iters = forw_backw_iters//8
+        print("warmup_iters is not given. Set it to", args.warmup_iters)
     else:
-        assert args.warmup_iters<=forw_backw_iters,f" Warmup iteration({args.warmup_iters}) must be smaller than total forward&backward iterations({forw_backw_iters})."
+        assert args.warmup_iters <= forw_backw_iters, f" Warmup iteration({args.warmup_iters}) must be smaller than total forward&backward iterations({forw_backw_iters})."
         print(f"User specified warmup_iters={args.warmup_iters}")
 
-    accumulate_epoch_dur=0.0
+    accumulate_epoch_dur = 0.0
     for epoch in range(args.start_epoch, args.epochs):
-        epoch_start=datetime.now(get_localzone())
+        epoch_start = datetime.now(get_localzone())
         print(f"{epoch_start}: Start epoch {epoch}/{args.epochs}.")
         if args.distributed:
             train_sampler.set_epoch(epoch)
 
         # train for one epoch
-        train(train_loader, model, optimizer, scaler, summary_writer, epoch, args)
-        
-        if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank == 0): # only the first GPU saves checkpoint
-            ckpt_filename=(f"ckpt/{dataset_str}/{args.arch}/{args.loss_mode}/batchsize{total_batch_size:04d}/{dataset_str}_{args.arch}{('os'+str(args.output_stride)) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{args.epochs:04d}ep{(args.iters if args.epochs is None else forw_backw_iters/args.grad_accum):05d}itbatchsize{total_batch_size:04d}_crop{args.cropsize}.pth.tar")
-            full_filename=os.path.join(args.output_dir, ckpt_filename)
+        train(train_loader, model, optimizer,
+              scaler, summary_writer, epoch, args)
+
+        # only the first GPU saves checkpoint
+        if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank == 0):
+            ckpt_path = os.path.join(args.output_dir, "ckpt",
+                                     dataset_str,
+                                     args.arch,
+                                     args.loss_mode,
+                                     f"batchsize{total_batch_size:04d}",
+                                     f"{dataset_str}_{args.arch}{('os'+str(args.output_stride)) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{args.epochs:04d}ep{(args.iters if args.epochs is None else forw_backw_iters/args.grad_accum):05d}itbatchsize{total_batch_size:04d}_crop{args.cropsize}.pth.tar")
             save_checkpoint({
                 'epoch': epoch + 1,
                 'arch': args.arch,
                 'state_dict': model.state_dict(),
-                'optimizer' : optimizer.state_dict(),
+                'optimizer': optimizer.state_dict(),
                 'scaler': scaler.state_dict(),
-            }, is_best=False, filename=full_filename
+            }, is_best=False, filename=ckpt_path
             )
-            print(f"{datetime.now(get_localzone())}: Save checkpoint of epoch {epoch} to {os.path.abspath(full_filename)}")
-            
-        epoch_end=datetime.now(get_localzone())
+            print(
+                f"{datetime.now(get_localzone())}: Save checkpoint of epoch {epoch} to {os.path.abspath(ckpt_path)}")
+
+        epoch_end = datetime.now(get_localzone())
         # calculate ETA (estimated time of arrival)
-        epoch_dur=(epoch_end-epoch_start).total_seconds()
-        accumulate_epoch_dur+=epoch_dur
-        print(f"Epoch {epoch}/{args.epochs} takes {str(epoch_end-epoch_start)}.")
-        eta=timedelta(seconds=accumulate_epoch_dur/((epoch+1-args.start_epoch)*iters_per_epoch)*(args.iters-1-(epoch+1)*iters_per_epoch)) + datetime.now(get_localzone())
+        epoch_dur = (epoch_end-epoch_start).total_seconds()
+        accumulate_epoch_dur += epoch_dur
+        print(
+            f"Epoch {epoch}/{args.epochs} takes {str(epoch_end-epoch_start)}.")
+        eta = timedelta(seconds=accumulate_epoch_dur/((epoch+1-args.start_epoch)*iters_per_epoch)
+                        * (args.iters-1-(epoch+1)*iters_per_epoch)) + datetime.now(get_localzone())
         print(f"[ETA] {eta}")
         print()
 
     if not args.multiprocessing_distributed or args.rank == 0:
         summary_writer.close()
+
 
 def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):
     batch_time = AverageMeter('Time', ':6.3f')
@@ -508,9 +546,9 @@ def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):
         data_time.update(time.time() - end)
 
         # check iterations
-        cur_iters=epoch*iters_per_epoch+i
-        if args.iter_mode=='iters' and cur_iters>=args.iters: 
-            progress.display(cur_iters-1) # print status of last iteration
+        cur_iters = epoch*iters_per_epoch+i
+        if args.iter_mode == 'iters' and cur_iters >= args.iters:
+            progress.display(cur_iters-1)  # print status of last iteration
             break
 
         # adjust learning rate and momentum coefficient per iteration
@@ -525,11 +563,14 @@ def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):
 
         # compute output
         with torch.cuda.amp.autocast(True):
-            loss = model(anchor_images, nanchor_images, moco_m) / args.grad_accum   # Normalize our loss (if averaged). See https://gist.github.com/thomwolf/ac7a7da6b1888c2eeac8ac8b9b05d3d3#file-gradient_accumulation-py-L5.
+            # Normalize our loss (if averaged). See https://gist.github.com/thomwolf/ac7a7da6b1888c2eeac8ac8b9b05d3d3#file-gradient_accumulation-py-L5.
+            loss = model(anchor_images, nanchor_images,
+                         moco_m) / args.grad_accum
 
         losses.update(loss.item(), anchor_images[0].size(0))
         if args.rank == 0:
-            summary_writer.add_scalar("loss", loss.item(), epoch * iters_per_epoch + i)
+            summary_writer.add_scalar(
+                "loss", loss.item(), epoch * iters_per_epoch + i)
 
         # compute gradient and do step
         # optimizer.zero_grad()                         # If we reset gradients tensors here, the gradients will never accumulate.
@@ -538,18 +579,19 @@ def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):
             # optimizer.step()                            # optimizer.step() should not be called when amp is applied. See https://discuss.pytorch.org/t/ddp-amp-gradient-accumulation-calling-optimizer-step-leads-to-nan-loss/162624.
             scaler.step(optimizer)
             scaler.update()
-            optimizer.zero_grad()                           # Reset gradients tensors only if we have done a step. See https://gist.github.com/thomwolf/ac7a7da6b1888c2eeac8ac8b9b05d3d3?permalink_comment_id=2921188#gistcomment-2921188. And https://pytorch.org/docs/stable/notes/amp_examples.html#gradient-accumulation.
+            # Reset gradients tensors only if we have done a step. See https://gist.github.com/thomwolf/ac7a7da6b1888c2eeac8ac8b9b05d3d3?permalink_comment_id=2921188#gistcomment-2921188. And https://pytorch.org/docs/stable/notes/amp_examples.html#gradient-accumulation.
+            optimizer.zero_grad()
 
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if cur_iters % args.print_freq == 0 or i==iters_per_epoch-1 or i==0:
+        if cur_iters % args.print_freq == 0 or i == iters_per_epoch-1 or i == 0:
             progress.display(cur_iters)
 
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
-    par_dir=os.path.dirname(filename)
+    par_dir = os.path.dirname(filename)
     if os.path.exists(par_dir) is not True:
         os.makedirs(par_dir)
 
@@ -560,6 +602,7 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
+
     def __init__(self, name, fmt=':f'):
         self.name = name
         self.fmt = fmt
@@ -602,9 +645,10 @@ class ProgressMeter(object):
 def adjust_learning_rate(optimizer, iter, args):
     """Decays the learning rate with half-cycle cosine after warmup"""
     if iter < args.warmup_iters:
-        lr = args.lr * iter / args.warmup_iters 
+        lr = args.lr * iter / args.warmup_iters
     else:
-        lr = args.lr * 0.5 * (1. + math.cos(math.pi * (iter - args.warmup_iters) / (args.iters - args.warmup_iters)))
+        lr = args.lr * 0.5 * (1. + math.cos(math.pi * (iter -
+                              args.warmup_iters) / (args.iters - args.warmup_iters)))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
     return lr
@@ -612,43 +656,51 @@ def adjust_learning_rate(optimizer, iter, args):
 
 def adjust_moco_momentum(epoch, args):
     """Adjust moco momentum based on current epoch"""
-    m = 1. - 0.5 * (1. + math.cos(math.pi * epoch / args.epochs)) * (1. - args.moco_m)
+    m = 1. - 0.5 * (1. + math.cos(math.pi * epoch /
+                    args.epochs)) * (1. - args.moco_m)
     return m
 
-def load_moco_backbone(backbone:nn.Module,args):
-    linear_keyword='fc'
-    #load state_dict
+
+def load_moco_backbone(backbone: nn.Module, args):
+    linear_keyword = 'fc'
+    # load state_dict
     checkpoint = torch.load(args.pretrained, map_location="cpu")
-    if args.arch=='resnet50': 
+    if args.arch == 'resnet50':
         # rename moco pre-trained keys
         state_dict = checkpoint['state_dict']
         for k in list(state_dict.keys()):
             # retain only base_encoder up to before the embedding layer
-            if k.startswith('module.'):# and not k.startswith('module.base_encoder.%s' % linear_keyword)
+            # and not k.startswith('module.base_encoder.%s' % linear_keyword)
+            if k.startswith('module.'):
                 # remove prefix
                 state_dict[k[len("module."):]] = state_dict[k]
             # delete renamed or unused k
             del state_dict[k]
-    else: # resnet101
+    else:  # resnet101
         # rename pretained layers
         state_dict = checkpoint
         for k in list(state_dict.keys()):
-            if k.startswith(linear_keyword): continue
+            if k.startswith(linear_keyword):
+                continue
             state_dict['base_encoder.'+k] = state_dict[k]
             state_dict['momentum_encoder.'+k] = state_dict[k]
             # delete renamed or unused k
             del state_dict[k]
     args.start_epoch = 0
-    msg = backbone.load_state_dict(state_dict, strict=False)#
+    msg = backbone.load_state_dict(state_dict, strict=False)
     # assert set(msg.missing_keys) == {"%s.weight" % linear_keyword, "%s.bias" % linear_keyword}, f"Missing keys: {msg.missing_keys}" # comment out this line to debug
     return backbone
 
+
 def download_preweights(list_url, download_path, key):
-    print("Download pretrained weights for %s backbone from '%s'." % (key,list_url[key]))
-    down_res=requests.get(list_url[key])
-    with open(download_path,'wb') as file:
+    print("Download pretrained weights for %s backbone from '%s'." %
+          (key, list_url[key]))
+    down_res = requests.get(list_url[key])
+    with open(download_path, 'wb') as file:
         file.write(down_res.content)
-    print("Download pretrained weights for %s backbone is saved to '%s'." % (key,download_path))
+    print("Download pretrained weights for %s backbone is saved to '%s'." %
+          (key, download_path))
+
 
 if __name__ == '__main__':
     main()
