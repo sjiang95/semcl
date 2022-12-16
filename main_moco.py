@@ -54,29 +54,29 @@ pretrained_weight_url = {
 }
 
 parser = argparse.ArgumentParser(description='SemCL Pre-Training')
-parser.add_argument('--dataroot', metavar='DIR', default='data',
+parser.add_argument('--dataroot', metavar='Path2ContrastivePairs', default='data',
                     help='path to dataset')
 parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet50',
                     type=str, choices=model_names,
                     help='model architecture: ' +
                     ' | '.join(model_names) +
                     ' (default: resnet50)')
-parser.add_argument('--pretrained', default='', type=str, metavar='PATH',
+parser.add_argument('--pretrained', default='', type=str, metavar='PATH2pretrainedWeights',
                     help="Path to pretrained weights having same architecture with --arch option.")
-parser.add_argument('-j', '--workers', default=multiprocessing.cpu_count(), type=int, metavar='N',
+parser.add_argument('-j', '--workers', default=multiprocessing.cpu_count(), type=int, metavar='num_workers_per_gpu',
                     help='number of data loading workers (default: use multiprocessing.cpu_count() for every GPU)')
-parser.add_argument('--epochs', default=None, type=int, metavar='N',
+parser.add_argument('--epochs', default=None, type=int, metavar='num_epoch',
                     help='number of total epochs to run')
-parser.add_argument('--iters', default=None, type=int, metavar='N',
+parser.add_argument('--iters', default=None, type=int, metavar='num_iter',
                     help='number of total iterations to update the model')
-parser.add_argument('--iter-mode', default='iters', type=str,
+parser.add_argument('--iter-mode', type=str,
                     help='Iteration mode: total iters or total epochs')
-parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
+parser.add_argument('--start-epoch', default=0, type=int, metavar='start_epoch',
                     help='manual epoch number (useful on restarts)')
-parser.add_argument('--cropsize', default=224, type=int, metavar='N',
+parser.add_argument('--cropsize', default=224, type=int, metavar='cropsize',
                     help='image crop size. Swin dopted 224*224.')
 parser.add_argument('-b', '--batch-size', default=64, type=int,
-                    metavar='N',
+                    metavar='batchsize',
                     help='mini-batch size (default: 64), this is the total '
                          'batch size of all GPUs on all nodes when '
                          'using Data Parallel or Distributed Data Parallel')
@@ -84,14 +84,14 @@ parser.add_argument('--grad-accum', default=1, type=int,
                     help='accumulation steps. Equivalent batch size would be batch_size*grad_accum.')
 parser.add_argument('--lr', '--learning-rate', default=0.6, type=float,
                     metavar='LR', help='initial (base) learning rate', dest='lr')
-parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
+parser.add_argument('--momentum', default=0.9, type=float, metavar="moco's momentum",
                     help='momentum')
 parser.add_argument('--wd', '--weight-decay', default=1e-6, type=float,
-                    metavar='W', help='weight decay (default: 1e-6)',
+                    metavar='weight_decay', help='weight decay (default: 1e-6)',
                     dest='weight_decay')
-parser.add_argument('-p', '--print-freq', default=100, type=int,
-                    metavar='N', help='print frequency (default: 100)')
-parser.add_argument('--resume', default='', type=str, metavar='PATH',
+parser.add_argument('-p', '--print-freq', default=1000, type=int,
+                    metavar='print_frequency', help='print frequency (default: 1000)')
+parser.add_argument('--resume', default='', type=str, metavar='PATH2checkpoint',
                     help='path to latest checkpoint (default: none)')
 parser.add_argument('--world-size', default=-1, type=int,
                     help='number of nodes for distributed training')
@@ -132,7 +132,7 @@ parser.add_argument('--stop-grad-conv1', action='store_true',
 parser.add_argument('--optimizer', default='adamw', type=str,
                     choices=['lars', 'adamw'],
                     help='optimizer used (default: lars)')
-parser.add_argument('--warmup-iters', default=None, type=int, metavar='N',
+parser.add_argument('--warmup-iters', default=None, type=int, metavar='warmup_iters',
                     help='number of warmup iters')
 parser.add_argument('--crop-min', default=0.08, type=float,
                     help='minimum scale for random cropping (default: 0.08)')
