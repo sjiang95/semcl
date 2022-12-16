@@ -68,7 +68,7 @@ parser.add_argument('-j', '--workers', default=multiprocessing.cpu_count(), type
 parser.add_argument('--epochs', default=None, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--iters', default=None, type=int, metavar='N',
-                    help='number of total iterations to run')
+                    help='number of total iterations to update the model')
 parser.add_argument('--iter-mode', default='iters', type=str,
                     help='Iteration mode: total iters or total epochs')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
@@ -439,17 +439,18 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # The total epochs (iterations) should be extend for {args.grad_accum} times, since we do one optimizer step every {args.grad_accum} iters.
     if args.epochs is None:
-        args.iters*=args.grad_accum
-        args.epochs=math.ceil(args.iters/iters_per_epoch)
+        forw_backw_iters=args.iters*args.grad_accum # forward-backward iteration = update_iter*grad_accum
+        args.epochs=math.ceil(forw_backw_iters/iters_per_epoch)
     else: # use the set epoch to calculate total iters
-        args.epochs*=args.grad_accum
-        args.iters=args.epochs*iters_per_epoch
+        forw_backw_iters=args.epochs*iters_per_epoch # num epochs is unrelated to grad_accum. The model would be updated for args.epochs*iters_per_epoch/args.grad_accum times.
+    print(f"Model will be updated for {forw_backw_iters/args.grad_accum} iterations ({args.epochs} epochs).")
 
     if args.warmup_iters is None:
-            args.warmup_iters=args.iters//8
+            args.warmup_iters=forw_backw_iters//8
             print("warmup_iters is not given. Set it to", args.warmup_iters)
     else:
-        print("User specified warmup_iters=",args.warmup_iters)
+        assert args.warmup_iters<=forw_backw_iters,f" Warmup iteration({args.warmup_iters}) must be smaller than total forward&backward iterations({forw_backw_iters})."
+        print(f"User specified warmup_iters={args.warmup_iters}")
 
     accumulate_epoch_dur=0.0
     for epoch in range(args.start_epoch, args.epochs):
@@ -461,9 +462,8 @@ def main_worker(gpu, ngpus_per_node, args):
         # train for one epoch
         train(train_loader, model, optimizer, scaler, summary_writer, epoch, args)
         
-        if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                and args.rank == 0): # only the first GPU saves checkpoint
-            ckpt_filename=(f"ckpt/{dataset_str}/{args.arch}/{args.loss_mode}/batchsize{total_batch_size:04d}/{dataset_str}_{args.arch}{('os'+str(args.output_stride)) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{int(args.epochs/args.grad_accum):04d}ep{int(args.iters/args.grad_accum):05d}itbatchsize{total_batch_size:04d}_crop{args.cropsize}.pth.tar")
+        if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank == 0): # only the first GPU saves checkpoint
+            ckpt_filename=(f"ckpt/{dataset_str}/{args.arch}/{args.loss_mode}/batchsize{total_batch_size:04d}/{dataset_str}_{args.arch}{('os'+str(args.output_stride)) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{args.epochs:04d}ep{(args.iters if args.epochs is None else forw_backw_iters/args.grad_accum):05d}itbatchsize{total_batch_size:04d}_crop{args.cropsize}.pth.tar")
             full_filename=os.path.join(args.output_dir, ckpt_filename)
             save_checkpoint({
                 'epoch': epoch + 1,
