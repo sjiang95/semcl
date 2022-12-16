@@ -8,7 +8,6 @@ import random
 import shutil
 import time
 from datetime import datetime, timedelta
-from tzlocal import get_localzone
 import warnings
 from functools import partial
 import multiprocessing
@@ -157,9 +156,8 @@ parser.add_argument("--output-stride", default=None, choices=[None, 8, 16],
 
 
 def main():
-    tz_local = get_localzone()
-    start_time = datetime.now(tz_local)
-    print("{}: Training started.".format(start_time))
+    start_time = datetime.now()
+    print(f"{start_time.strftime('%Y/%m/%d %H:%M:%S.%f')}: Training started.")
     print(f"Use Pytorch {torch.__version__} with cuda {torch.version.cuda}")
     args = parser.parse_args()
 
@@ -233,8 +231,8 @@ def main():
         # Simply call main_worker function
         main_worker(args.gpu, ngpus_per_node, args)
 
-    end_time = datetime.now(tz_local)
-    print("{}: Training finished.".format(end_time))
+    end_time = datetime.now()
+    print(f"{end_time.strftime('%Y/%m/%d %H:%M:%S.%f')}: Training finished.")
     train_time_consume = end_time-start_time
     print("This training process takes ", str(train_time_consume))
 
@@ -480,9 +478,9 @@ def main_worker(gpu, ngpus_per_node, args):
         assert args.warmup_iters <= forw_backw_iters, f" Warmup iteration({args.warmup_iters}) must be smaller than total forward&backward iterations({forw_backw_iters})."
         print(f"User specified warmup_iters={args.warmup_iters}")
 
-    accumulate_epoch_dur = 0.0
+    training_start_ts=time.time()
     for epoch in range(args.start_epoch, args.epochs):
-        epoch_start = datetime.now(get_localzone())
+        epoch_start = datetime.now()
         print(f"{epoch_start}: Start epoch {epoch}/{args.epochs}.")
         if args.distributed:
             train_sampler.set_epoch(epoch)
@@ -508,18 +506,16 @@ def main_worker(gpu, ngpus_per_node, args):
             }, is_best=False, filename=ckpt_path
             )
             print(
-                f"{datetime.now(get_localzone())}: Save checkpoint of epoch {epoch} to {os.path.abspath(ckpt_path)}")
+                f"{datetime.now()}: Save checkpoint of epoch {epoch} to {os.path.abspath(ckpt_path)}")
 
-        epoch_end = datetime.now(get_localzone())
-        # calculate ETA (estimated time of arrival)
-        epoch_dur = (epoch_end-epoch_start).total_seconds()
-        accumulate_epoch_dur += epoch_dur
-        print(
-            f"Epoch {epoch}/{args.epochs} takes {str(epoch_end-epoch_start)}.")
-        eta = timedelta(seconds=accumulate_epoch_dur/((epoch+1-args.start_epoch)*iters_per_epoch)
-                        * (args.iters-1-(epoch+1)*iters_per_epoch)) + datetime.now(get_localzone())
-        print(f"[ETA] {eta}")
-        print()
+            epoch_end = datetime.now()
+            print(f"Epoch {epoch}/{args.epochs} takes {epoch_end-epoch_start}.")
+            epoch_end_ts = time.time()
+            # calculate ETA (estimated time of arrival)
+            training_dur=epoch_end_ts-training_start_ts
+            eta=datetime.fromtimestamp(time.time()+training_dur/((epoch+1-args.start_epoch)*iters_per_epoch)*(args.iters-1-(epoch+1)*iters_per_epoch))
+            print(f"[ETA] {eta}, {time.tzname[0]}")
+            print()
 
     if not args.multiprocessing_distributed or args.rank == 0:
         summary_writer.close()
