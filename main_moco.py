@@ -469,7 +469,7 @@ def main_worker(gpu, ngpus_per_node, args):
         # num epochs is unrelated to grad_accum. The model would be updated for args.epochs*iters_per_epoch/args.grad_accum times.
         forw_backw_iters = args.epochs*iters_per_epoch
     print(
-        f"Model will be updated for {forw_backw_iters/args.grad_accum} iterations ({args.epochs} epochs).")
+        f"Model will be updated for {int(forw_backw_iters/args.grad_accum)} iterations ({args.epochs} epochs).")
 
     if args.warmup_iters is None:
         args.warmup_iters = forw_backw_iters//8
@@ -496,7 +496,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                      args.arch,
                                      args.loss_mode,
                                      f"batchsize{equiv_batch_size:04d}",
-                                     f"{dataset_str}_{args.arch}{('os'+str(args.output_stride)) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{args.epochs:04d}ep{(args.iters if args.epochs is None else forw_backw_iters/args.grad_accum):05d}itbatchsize{equiv_batch_size:04d}_crop{args.cropsize}.pth.tar")
+                                     f"{dataset_str}_{args.arch}{('os'+str(args.output_stride)) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{args.epochs:04d}ep{(args.iters if args.epochs is None else int(forw_backw_iters/args.grad_accum))}itbatchsize{equiv_batch_size:04d}_crop{args.cropsize}.pth.tar")
             save_checkpoint({
                 'epoch': epoch + 1,
                 'arch': args.arch,
