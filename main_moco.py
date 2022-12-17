@@ -52,7 +52,7 @@ pretrained_weight_url = {
     'swin_base': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_base_patch4_window7_224_22k.pth',
     'swin_large': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_large_patch4_window7_224_22k.pth',
 }
-
+moco_m_global = None
 parser = argparse.ArgumentParser(description='SemCL Pre-Training')
 parser.add_argument('--dataroot', metavar='Path2ContrastivePairs', default='data',
                     help='path to dataset')
@@ -478,10 +478,13 @@ def main_worker(gpu, ngpus_per_node, args):
     else:  # use the set epoch to calculate total iters
         # num epochs is unrelated to grad_accum. The model would be updated for args.epochs*iters_per_epoch/args.grad_accum times.
         forw_backw_iters = args.epochs*iters_per_epoch
-    print(
-        f"The total forward-backward iteration is {forw_backw_iters} ({args.epochs} epochs), but the model will be updated for {int(forw_backw_iters/args.grad_accum)} iterations due to gradient accumulation {args.grad_accum}.")
+    if args.grad_accum > 1:
+        print(
+            f"Due to gradient accumulation {args.grad_accum}, the total forward-backward iteration is {forw_backw_iters} (~{args.epochs} epochs), which is equivalent to update the model for {args.iters} iterations as user specified with batchsize (grad_accum*batch_size=) {equiv_batch_size}).")
 
     training_start_ts = time.time()
+    global moco_m_global
+    moco_m_global = args.moco_m
     for epoch in range(args.start_epoch, args.epochs):
         epoch_start = datetime.now()
         print(f"{epoch_start}: Start epoch {epoch}/{args.epochs}.")
@@ -527,13 +530,14 @@ def main_worker(gpu, ngpus_per_node, args):
 
 
 def train(train_loader, model, optimizer, lr_scheduler, scaler, summary_writer, epoch, args):
-    batch_time = AverageMeter('Time', ':6.3f')
-    data_time = AverageMeter('Data', ':6.3f')
+    batch_time = AverageMeter('BatchTime', ':6.3f')
+    data_time = AverageMeter('DataTime', ':6.3f')
     learning_rates = AverageMeter('LR', ':.4e')
     losses = AverageMeter('Loss', ':.4e')
+    moco_momentum = AverageMeter('moco_momemtum', ':.8e')
     progress = ProgressMeter(
         args.iters*args.grad_accum,  # num update iters is determined by user-defined iteration regardless of grad_accum. But forward-backward iteration is args.iters*args.grad_accum
-        [batch_time, data_time, learning_rates, losses],
+        [batch_time, data_time, learning_rates, losses, moco_momentum],
         prefix=f"Epoch: [{epoch}]")
 
     # switch to train mode
@@ -541,7 +545,6 @@ def train(train_loader, model, optimizer, lr_scheduler, scaler, summary_writer, 
 
     end = time.time()
     iters_per_epoch = math.floor(len(train_loader)/args.grad_accum)
-    moco_m = args.moco_m
     for i, (anchor_images, nanchor_images) in enumerate(train_loader):
         # measure data loading time
         data_time.update(time.time() - end)
@@ -557,12 +560,19 @@ def train(train_loader, model, optimizer, lr_scheduler, scaler, summary_writer, 
             anchor_images = anchor_images.cuda(args.gpu, non_blocking=True)
             nanchor_images = nanchor_images.cuda(args.gpu, non_blocking=True)
 
+        cur_lr = lr_scheduler.get_last_lr()[0]
+        learning_rates.update(cur_lr)
+        # adjust momentum coefficient per update iteration
+        if (i+1) % args.grad_accum == 0 and args.moco_m_cos:
+            global moco_m_global
+            moco_m_global = adjust_moco_momentum(
+                epoch + i / iters_per_epoch, args)
+        moco_momentum.update(moco_m_global)
         # compute output
         with torch.cuda.amp.autocast(True):
             # Normalize our loss (if averaged). See https://gist.github.com/thomwolf/ac7a7da6b1888c2eeac8ac8b9b05d3d3#file-gradient_accumulation-py-L5.
             loss = model(anchor_images, nanchor_images,
-                         moco_m) / args.grad_accum
-
+                         moco_m_global) / args.grad_accum
         losses.update(loss.item(), anchor_images[0].size(0))
 
         # compute gradient and do step
@@ -571,29 +581,29 @@ def train(train_loader, model, optimizer, lr_scheduler, scaler, summary_writer, 
         if (i+1) % args.grad_accum == 0:                # Wait for several backward steps
             # optimizer.step()                            # optimizer.step() should not be called when amp is applied. See https://discuss.pytorch.org/t/ddp-amp-gradient-accumulation-calling-optimizer-step-leads-to-nan-loss/162624.
             scaler.step(optimizer)
+            scale = scaler.get_scale()
             scaler.update()
+            # To avoid warning: Detected call of lr_scheduler.step() before optimizer.step(). In PyTorch 1.1.0 and later, you should call them in the opposite order: optimizer.step() before lr_scheduler.step(). Failure to do this will result in PyTorch skipping the first value of the learning rate schedule.
+            # Solution: https://discuss.pytorch.org/t/optimizer-step-before-lr-scheduler-step-error-using-gradscaler/92930/10?u=qsj287068067
+            skip_lr_sched = (scale > scaler.get_scale())
             # Reset gradients tensors only if we have done a step. See https://gist.github.com/thomwolf/ac7a7da6b1888c2eeac8ac8b9b05d3d3?permalink_comment_id=2921188#gistcomment-2921188. And https://pytorch.org/docs/stable/notes/amp_examples.html#gradient-accumulation.
             optimizer.zero_grad()
-            cur_lr = lr_scheduler.get_last_lr()[0]
-            learning_rates.update(cur_lr)
             if args.rank == 0:
                 summary_writer.add_scalar(
                     "loss", loss.item(), int(epoch * iters_per_epoch/args.grad_accum) + i)
                 summary_writer.add_scalar(
                     "lr", cur_lr, int(epoch * iters_per_epoch/args.grad_accum) + i)
-            lr_scheduler.step()
-
-            # adjust momentum coefficient per update iteration
-            if args.moco_m_cos:
-                moco_m = adjust_moco_momentum(
-                    epoch + i / iters_per_epoch, args)
+                summary_writer.add_scalar(
+                    "moco_momentum", moco_m_global, int(epoch * iters_per_epoch/args.grad_accum) + i)
+            if not skip_lr_sched:
+                lr_scheduler.step()
 
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
 
-        # print progress at args.print_freq, epoch start and epoch end
-        if cur_iters % args.print_freq == 0 or i == iters_per_epoch-1 or i == 0:
+        # print progress at args.print_freq and epoch start
+        if cur_iters % args.print_freq == 0 or i == 0:
             progress.display(cur_iters)
 
 
