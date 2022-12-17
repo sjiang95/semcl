@@ -82,12 +82,12 @@ parser.add_argument('-b', '--batch-size', default=64, type=int,
                          'using Data Parallel or Distributed Data Parallel')
 parser.add_argument('--grad-accum', default=1, type=int,
                     help='accumulation steps. Equivalent batch size would be batch_size*grad_accum.')
-parser.add_argument('--lr', '--learning-rate', default=0.6, type=float,
+parser.add_argument('--lr', '--learning-rate', default=1.5e-4, type=float,
                     metavar='LR', help='initial (base) learning rate', dest='lr')
 parser.add_argument('--momentum', default=0.9, type=float, metavar="moco's momentum",
                     help='momentum')
-parser.add_argument('--wd', '--weight-decay', default=1e-6, type=float,
-                    metavar='weight_decay', help='weight decay (default: 1e-6)',
+parser.add_argument('--wd', '--weight-decay', default=0.1, type=float,
+                    metavar='weight_decay', help='weight decay (default: 0.1)',
                     dest='weight_decay')
 parser.add_argument('-p', '--print-freq', default=1000, type=int,
                     metavar='print_frequency', help='print frequency (default: 1000)')
@@ -121,8 +121,8 @@ parser.add_argument('--moco-m', default=0.99, type=float,
 parser.add_argument('--moco-m-cos', action='store_true',
                     help='gradually increase moco momentum to 1 with a '
                          'half-cycle cosine schedule')
-parser.add_argument('--moco-t', default=1.0, type=float,
-                    help='softmax temperature (default: 1.0)')
+parser.add_argument('--moco-t', default=0.2, type=float,
+                    help='softmax temperature (default: 0.2)')
 
 # vit specific configs:
 parser.add_argument('--stop-grad-conv1', action='store_true',
