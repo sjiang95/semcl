@@ -7,7 +7,7 @@ import os
 import random
 import shutil
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 import warnings
 from functools import partial
 import multiprocessing
@@ -132,8 +132,8 @@ parser.add_argument('--stop-grad-conv1', action='store_true',
 parser.add_argument('--optimizer', default='adamw', type=str,
                     choices=['lars', 'adamw'],
                     help='optimizer used (default: lars)')
-parser.add_argument('--warmup-iters', default=None, type=int, metavar='warmup_iters',
-                    help='number of warmup iters')
+parser.add_argument('--warmup-ratio', default=None, type=float, metavar='warmup_ratio',
+                    help='number of warmup iters=warmup_ratio*total_update_iter')
 parser.add_argument('--crop-min', default=0.08, type=float,
                     help='minimum scale for random cropping (default: 0.08)')
 
@@ -356,6 +356,15 @@ def main_worker(gpu, ngpus_per_node, args):
         optimizer = torch.optim.AdamW(model.parameters(), args.lr,
                                       weight_decay=args.weight_decay)
 
+    # lr scheduler
+    lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(
+        optimizer, max_lr=args.lr, total_steps=args.iters, pct_start=0.125 if args.warmup_ratio is None else args.warmup_ratio)
+    """
+    [OneCycleLR — PyTorch documentation](https://pytorch.org/docs/stable/generated/torch.optim.lr_scheduler.OneCycleLR.html#onecyclelr)
+    The total model update times is determined by args.iters regardless of args.grad_accum
+    pct_start (float): The percentage of the cycle (in number of steps) spent increasing the learning rate.
+    """
+
     scaler = torch.cuda.amp.GradScaler()
 
     list_datasets = args.dataset
@@ -460,8 +469,9 @@ def main_worker(gpu, ngpus_per_node, args):
 
     iters_per_epoch = len(train_loader)
 
-    # The total epochs (iterations) should be extend for {args.grad_accum} times, since we do one optimizer step every {args.grad_accum} iters.
+    forw_backw_iters = None
     if args.epochs is None:
+        # The total iterations should be extend for {args.grad_accum} times, since we do one optimizer step every {args.grad_accum} iters.
         # forward-backward iteration = update_iter*grad_accum
         forw_backw_iters = args.iters*args.grad_accum
         args.epochs = math.ceil(forw_backw_iters/iters_per_epoch)
@@ -469,14 +479,7 @@ def main_worker(gpu, ngpus_per_node, args):
         # num epochs is unrelated to grad_accum. The model would be updated for args.epochs*iters_per_epoch/args.grad_accum times.
         forw_backw_iters = args.epochs*iters_per_epoch
     print(
-        f"Model will be updated for {int(forw_backw_iters/args.grad_accum)} iterations ({args.epochs} epochs).")
-
-    if args.warmup_iters is None:
-        args.warmup_iters = forw_backw_iters//8
-        print("warmup_iters is not given. Set it to", args.warmup_iters)
-    else:
-        assert args.warmup_iters <= forw_backw_iters, f" Warmup iteration({args.warmup_iters}) must be smaller than total forward&backward iterations({forw_backw_iters})."
-        print(f"User specified warmup_iters={args.warmup_iters}")
+        f"The total forward-backward iteration is {forw_backw_iters} ({args.epochs} epochs), but the model will be updated for {int(forw_backw_iters/args.grad_accum)} iterations due to gradient accumulation {args.grad_accum}.")
 
     training_start_ts = time.time()
     for epoch in range(args.start_epoch, args.epochs):
@@ -486,7 +489,7 @@ def main_worker(gpu, ngpus_per_node, args):
             train_sampler.set_epoch(epoch)
 
         # train for one epoch
-        train(train_loader, model, optimizer,
+        train(train_loader, model, optimizer, lr_scheduler,
               scaler, summary_writer, epoch, args)
 
         # only the first GPU saves checkpoint
@@ -515,7 +518,7 @@ def main_worker(gpu, ngpus_per_node, args):
             # calculate ETA (estimated time of arrival)
             training_dur = epoch_end_ts-training_start_ts
             eta = datetime.fromtimestamp(time.time()+training_dur/(
-                (epoch+1-args.start_epoch)*iters_per_epoch)*(args.iters-1-(epoch+1)*iters_per_epoch))
+                (epoch+1-args.start_epoch)*iters_per_epoch)*(forw_backw_iters-1-(epoch+1)*iters_per_epoch))
             print(f"[ETA] {eta}, {time.tzname[0]}")
             print()
 
@@ -523,21 +526,21 @@ def main_worker(gpu, ngpus_per_node, args):
         summary_writer.close()
 
 
-def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):
+def train(train_loader, model, optimizer, lr_scheduler, scaler, summary_writer, epoch, args):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     learning_rates = AverageMeter('LR', ':.4e')
     losses = AverageMeter('Loss', ':.4e')
     progress = ProgressMeter(
-        args.iters,
+        args.iters*args.grad_accum,  # num update iters is determined by user-defined iteration regardless of grad_accum. But forward-backward iteration is args.iters*args.grad_accum
         [batch_time, data_time, learning_rates, losses],
-        prefix="Epoch: [{}]".format(epoch))
+        prefix=f"Epoch: [{epoch}]")
 
     # switch to train mode
     model.train()
 
     end = time.time()
-    iters_per_epoch = len(train_loader)
+    iters_per_epoch = math.floor(len(train_loader)/args.grad_accum)
     moco_m = args.moco_m
     for i, (anchor_images, nanchor_images) in enumerate(train_loader):
         # measure data loading time
@@ -545,15 +548,10 @@ def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):
 
         # check iterations
         cur_iters = epoch*iters_per_epoch+i
-        if args.iter_mode == 'iters' and cur_iters >= args.iters:
+        # use condition i>=iters_per_epoch to remove tail mini-batch if iters_per_epoch cannot be evenly divided by args.grad_accum
+        if (args.iter_mode == 'iters' and cur_iters >= args.iters) or i >= iters_per_epoch:
             progress.display(cur_iters-1)  # print status of last iteration
             break
-
-        # adjust learning rate and momentum coefficient per iteration
-        lr = adjust_learning_rate(optimizer, cur_iters, args)
-        learning_rates.update(lr)
-        if args.moco_m_cos:
-            moco_m = adjust_moco_momentum(epoch + i / iters_per_epoch, args)
 
         if args.gpu is not None:
             anchor_images = anchor_images.cuda(args.gpu, non_blocking=True)
@@ -566,9 +564,6 @@ def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):
                          moco_m) / args.grad_accum
 
         losses.update(loss.item(), anchor_images[0].size(0))
-        if args.rank == 0:
-            summary_writer.add_scalar(
-                "loss", loss.item(), epoch * iters_per_epoch + i)
 
         # compute gradient and do step
         # optimizer.zero_grad()                         # If we reset gradients tensors here, the gradients will never accumulate.
@@ -579,11 +574,25 @@ def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):
             scaler.update()
             # Reset gradients tensors only if we have done a step. See https://gist.github.com/thomwolf/ac7a7da6b1888c2eeac8ac8b9b05d3d3?permalink_comment_id=2921188#gistcomment-2921188. And https://pytorch.org/docs/stable/notes/amp_examples.html#gradient-accumulation.
             optimizer.zero_grad()
+            cur_lr = lr_scheduler.get_last_lr()[0]
+            learning_rates.update(cur_lr)
+            if args.rank == 0:
+                summary_writer.add_scalar(
+                    "loss", loss.item(), int(epoch * iters_per_epoch/args.grad_accum) + i)
+                summary_writer.add_scalar(
+                    "lr", cur_lr, int(epoch * iters_per_epoch/args.grad_accum) + i)
+            lr_scheduler.step()
+
+            # adjust momentum coefficient per update iteration
+            if args.moco_m_cos:
+                moco_m = adjust_moco_momentum(
+                    epoch + i / iters_per_epoch, args)
 
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
 
+        # print progress at args.print_freq, epoch start and epoch end
         if cur_iters % args.print_freq == 0 or i == iters_per_epoch-1 or i == 0:
             progress.display(cur_iters)
 
@@ -638,18 +647,6 @@ class ProgressMeter(object):
         num_digits = len(str(num_batches // 1))
         fmt = '{:' + str(num_digits) + 'd}'
         return '[' + fmt + '/' + fmt.format(num_batches) + ']'
-
-
-def adjust_learning_rate(optimizer, iter, args):
-    """Decays the learning rate with half-cycle cosine after warmup"""
-    if iter < args.warmup_iters:
-        lr = args.lr * iter / args.warmup_iters
-    else:
-        lr = args.lr * 0.5 * (1. + math.cos(math.pi * (iter -
-                              args.warmup_iters) / (args.iters - args.warmup_iters)))
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
-    return lr
 
 
 def adjust_moco_momentum(epoch, args):
