@@ -381,6 +381,7 @@ def main_worker(gpu, ngpus_per_node, args):
         args.multiprocessing_distributed and args.rank == 0) else None
 
     # optionally resume from a checkpoint
+    global moco_m_global
     if args.resume:
         if os.path.isfile(args.resume):
             print("=> loading checkpoint '{}'".format(args.resume))
@@ -392,13 +393,14 @@ def main_worker(gpu, ngpus_per_node, args):
                 checkpoint = torch.load(args.resume, map_location=loc)
             args.start_epoch = checkpoint['epoch']
             model.load_state_dict(checkpoint['state_dict'])
-            # optimizer.load_state_dict(checkpoint['optimizer'])
-            # scaler.load_state_dict(checkpoint['scaler'])
-            print("=> loaded checkpoint '{}' (epoch {})"
-                  .format(args.resume, checkpoint['epoch']))
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            scaler.load_state_dict(checkpoint['scaler'])
+            moco_m_global=checkpoint['moco_moemtum']
+            print(
+                f"=> loaded checkpoint '{args.resume}' (epoch {checkpoint['epoch']})")
             del checkpoint
         else:
-            print("=> no checkpoint found at '{}'".format(args.resume))
+            print(f"=> no checkpoint found at '{args.resume}'")
 
     cudnn.benchmark = True
 
@@ -483,7 +485,6 @@ def main_worker(gpu, ngpus_per_node, args):
             f"Due to gradient accumulation {args.grad_accum}, the total forward-backward iteration is {forw_backw_iters} (~{args.epochs} epochs), which is equivalent to update the model for {args.iters} iterations as user specified with batchsize (grad_accum*batch_size=) {equiv_batch_size}).")
 
     training_start_ts = time.time()
-    global moco_m_global
     moco_m_global = args.moco_m
     for epoch in range(args.start_epoch, args.epochs):
         epoch_start = datetime.now()
@@ -509,6 +510,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 'state_dict': model.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'scaler': scaler.state_dict(),
+                'moco_moemtum': moco_m_global
             }, is_best=False, filename=ckpt_path
             )
             print(
@@ -545,6 +547,7 @@ def train(train_loader, model, optimizer, lr_scheduler, scaler, summary_writer, 
 
     end = time.time()
     iters_per_epoch = math.floor(len(train_loader)/args.grad_accum)
+    global moco_m_global
     for i, (anchor_images, nanchor_images) in enumerate(train_loader):
         # measure data loading time
         data_time.update(time.time() - end)
@@ -564,7 +567,6 @@ def train(train_loader, model, optimizer, lr_scheduler, scaler, summary_writer, 
         learning_rates.update(cur_lr)
         # adjust momentum coefficient per update iteration
         if (i+1) % args.grad_accum == 0 and args.moco_m_cos:
-            global moco_m_global
             moco_m_global = adjust_moco_momentum(
                 epoch + i / iters_per_epoch, args)
         moco_momentum.update(moco_m_global)
