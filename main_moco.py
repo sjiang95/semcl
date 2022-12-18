@@ -278,11 +278,6 @@ def main_worker(gpu, ngpus_per_node, args):
     else:
         raise ValueError("Unknown loss mode: ", args.loss_mode)
 
-    if args.output_dir == '.':
-        print("Checkpoints will be written to current folder.")
-    else:
-        print("Checkpoints will be written to %s." % (args.output_dir))
-
     # create model
     print("=> creating model '{}'".format(args.arch))
     if args.arch.startswith('swin'):
@@ -490,6 +485,13 @@ def main_worker(gpu, ngpus_per_node, args):
 
     training_start_ts = time.time()
     moco_m_global = args.moco_m
+    ckpt_path = os.path.join(args.output_dir, "ckpt",
+                             dataset_str,
+                             args.arch,
+                             args.loss_mode,
+                             f"batchsize{equiv_batch_size:04d}",
+                             f"{dataset_str}_{args.arch}{('os'+str(args.output_stride)) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{args.epochs:04d}ep{(args.iters if args.epochs is None else num_steps)}itbatchsize{equiv_batch_size:04d}_crop{args.cropsize}.pth.tar")
+    print(f"Checkpoints will be saved to {ckpt_path}.")
     for epoch in range(args.start_epoch, args.epochs):
         epoch_start = datetime.now()
         print(f"{epoch_start}: Start epoch {epoch}/{args.epochs}.")
@@ -502,19 +504,13 @@ def main_worker(gpu, ngpus_per_node, args):
 
         # only the first GPU saves checkpoint
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank == 0):
-            ckpt_path = os.path.join(args.output_dir, "ckpt",
-                                     dataset_str,
-                                     args.arch,
-                                     args.loss_mode,
-                                     f"batchsize{equiv_batch_size:04d}",
-                                     f"{dataset_str}_{args.arch}{('os'+str(args.output_stride)) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{args.epochs:04d}ep{(args.iters if args.epochs is None else num_steps)}itbatchsize{equiv_batch_size:04d}_crop{args.cropsize}.pth.tar")
             save_checkpoint({
                 'epoch': epoch + 1,
                 'arch': args.arch,
                 'state_dict': model.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'scaler': scaler.state_dict(),
-                'moco_moemtum': moco_m_global
+                'moco_moemtum': moco_m_global,
             }, is_best=False, filename=ckpt_path
             )
             print(
