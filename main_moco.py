@@ -12,6 +12,7 @@ import warnings
 from functools import partial
 import multiprocessing
 import requests
+from prettytable import PrettyTable
 
 import torch
 import torch.nn as nn
@@ -156,12 +157,14 @@ parser.add_argument("--output-stride", default=None, choices=[None, 8, 16],
                     help="This option is valid for only resnet backbones.")
 
 
+tb = PrettyTable(field_names=["key", "value"])
+
+
 def main():
     start_time = datetime.now()
     print(f"{start_time.strftime('%Y/%m/%d %H:%M:%S.%f')}: Training started.")
     print(f"Use Pytorch {torch.__version__} with cuda {torch.version.cuda}")
     args = parser.parse_args()
-
     if args.seed is not None:
         random.seed(args.seed)
         torch.manual_seed(args.seed)
@@ -219,11 +222,13 @@ def main():
                                     path_to_pretrained_weights, args.arch)
         args.pretrained = path_to_pretrained_weights
         print("Use pretrained weight at", args.pretrained)
+        tb.add_row(["Initialize by", args.pretrained])
 
     if args.multiprocessing_distributed:
         # Since we have ngpus_per_node processes per node, the total world_size
         # needs to be adjusted accordingly
         args.world_size = ngpus_per_node * args.world_size
+        tb.add_row(["DDP world_size", args.world_size])
         args.workers = args.workers//ngpus_per_node
         # Use torch.multiprocessing.spawn to launch distributed processes: the
         # main_worker process function
@@ -277,9 +282,11 @@ def main_worker(gpu, ngpus_per_node, args):
         args.loss_mode = 'test'
     else:
         raise ValueError("Unknown loss mode: ", args.loss_mode)
+    tb.add_row(["Loss mode", args.loss_mode])
 
     # create model
     print("=> creating model '{}'".format(args.arch))
+    tb.add_row(["arch", args.arch])
     if args.arch.startswith('swin'):
         # Unlike moco whose pretrained weights contain both base and momentum encoder,
         # swin transformer pretrained weights contains only the backbone (base encoder) itself.
@@ -291,6 +298,7 @@ def main_worker(gpu, ngpus_per_node, args):
         args.output_stride == None
     else:
         print(f"output_stride is {args.output_stride}.")
+        tb.add_row(["output stride(os)", args.output_stride])
         # from deeplabv3plus. See https://github.com/VainF/DeepLabV3Plus-Pytorch/blob/4e1087de98bc49d55b9239ae92810ef7368660db/network/modeling.py#L34.
         if args.output_stride == 8:
             replace_stride_with_dilation = [False, True, True]
@@ -307,13 +315,16 @@ def main_worker(gpu, ngpus_per_node, args):
                     args.arch], zero_init_residual=True, replace_stride_with_dilation=replace_stride_with_dilation),
             args.moco_dim, args.moco_mlp_dim, args.moco_t, args.loss_mode)
         model = load_moco_backbone(model, args=args)
+    tb.add_row(["softmax temperature", args.moco_t])
 
     # store total batch_size
     # equivalent equiv_batch_size=args.batch_size*grad_accum
     equiv_batch_size = args.batch_size*args.grad_accum
+    tb.add_row(["batch size", equiv_batch_size])
 
     # infer learning rate before changing batch size
     args.lr = args.lr * equiv_batch_size / 256
+    tb.add_row(["scaled lr", args.lr])
 
     if not torch.cuda.is_available():
         print('using CPU, this will be slow')
@@ -352,11 +363,16 @@ def main_worker(gpu, ngpus_per_node, args):
     elif args.optimizer == 'adamw':
         optimizer = torch.optim.AdamW(model.parameters(), args.lr,
                                       weight_decay=args.weight_decay)
+    tb.add_rows([
+        ["optimizer", args.optimizer],
+        ["weight decay", args.weight_decay]
+    ])
 
     scaler = torch.cuda.amp.GradScaler()
 
     list_datasets = args.dataset
     dataset_str = ""
+    tb.add_row(["dataset(s)", list_datasets])
     for i, dataset in enumerate(list_datasets):
         if i == len(list_datasets)-1:
             dataset_str = dataset_str+dataset
@@ -387,6 +403,7 @@ def main_worker(gpu, ngpus_per_node, args):
             print(
                 f"=> loaded checkpoint '{args.resume}' (epoch {checkpoint['epoch']})")
             del checkpoint
+            tb.add_row(["resume", args.resume])
         else:
             print(f"=> no checkpoint found at '{args.resume}'")
 
@@ -397,6 +414,7 @@ def main_worker(gpu, ngpus_per_node, args):
     normalize = et.ExtNormalize(mean=[0.485, 0.456, 0.406],
                                 std=[0.229, 0.224, 0.225])
     print(f"Crop size: {args.cropsize}")
+    tb.add_row(["crop size", args.cropsize])
     # directly resize original image for complete semantic information
     augmentation0 = [
         et.ExtResize(args.cropsize),
@@ -473,6 +491,11 @@ def main_worker(gpu, ngpus_per_node, args):
     if args.grad_accum > 1:
         print(
             f"Due to gradient accumulation {args.grad_accum}, the total forward-backward iteration is {forw_backw_iters} (~{args.epochs} epochs), which is equivalent to update the model for {num_steps} iterations as user specified with batchsize (grad_accum*batch_size=) {equiv_batch_size}).")
+    tb.add_rows([
+        ["epochs", args.epochs],
+        ["iters(forward-backward)", forw_backw_iters],
+        ["iters(update steps)", num_steps]
+    ])
 
     # lr scheduler
     lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(
@@ -484,7 +507,8 @@ def main_worker(gpu, ngpus_per_node, args):
     """
 
     training_start_ts = time.time()
-    moco_m_global = args.moco_m
+    if not args.resume: moco_m_global = args.moco_m
+    tb.add_row(["moco momentum", moco_m_global])
     ckpt_path = os.path.join(args.output_dir, "ckpt",
                              dataset_str,
                              args.arch,
@@ -492,6 +516,8 @@ def main_worker(gpu, ngpus_per_node, args):
                              f"batchsize{equiv_batch_size:04d}",
                              f"{dataset_str}_{args.arch}{('os'+str(args.output_stride)) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{args.epochs:04d}ep{(args.iters if args.epochs is None else num_steps)}itbatchsize{equiv_batch_size:04d}_crop{args.cropsize}.pth.tar")
     print(f"Checkpoints will be saved to {ckpt_path}.")
+    tb.add_row(["save ckpt to", ckpt_path])
+    print(f"Training config summary:\n{tb}")
     for epoch in range(args.start_epoch, args.epochs):
         epoch_start = datetime.now()
         print(f"{epoch_start}: Start epoch {epoch}/{args.epochs}.")
