@@ -453,7 +453,8 @@ def main_worker(gpu, ngpus_per_node, args):
             train_sampler is None),
         num_workers=args.workers, pin_memory=True, sampler=train_sampler, drop_last=True)
 
-    iters_per_epoch = len(train_loader)
+    # use the following expression to remove tail mini-batch if len(train_loader) cannot be evenly divided by args.grad_accum
+    iters_per_epoch = math.floor(len(train_loader)/args.grad_accum)*args.grad_accum
 
     global forw_backw_iters
     if args.epochs is None:
@@ -576,7 +577,8 @@ def train(train_loader, model, optimizer, lr_scheduler, scaler, summary_writer, 
     model.train()
 
     end = time.time()
-    iters_per_epoch = math.floor(len(train_loader)/args.grad_accum)
+    # use condition i >= math.floor(iters_per_epoch/args.grad_accum)*args.grad_accum to remove tail mini-batch if iters_per_epoch cannot be evenly divided by args.grad_accum
+    iters_per_epoch = math.floor(len(train_loader)/args.grad_accum)*args.grad_accum
     global moco_m_global
     for i, (anchor_images, nanchor_images) in enumerate(train_loader):
         # measure data loading time
@@ -584,7 +586,6 @@ def train(train_loader, model, optimizer, lr_scheduler, scaler, summary_writer, 
 
         # check iterations
         cur_iters = epoch*iters_per_epoch+i
-        # use condition i>=iters_per_epoch to remove tail mini-batch if iters_per_epoch cannot be evenly divided by args.grad_accum
         if (iter_mode_global == 'iters' and cur_iters >= args.iters) or i >= iters_per_epoch:
             progress.display(cur_iters-1)  # print status of last iteration
             break
@@ -622,11 +623,11 @@ def train(train_loader, model, optimizer, lr_scheduler, scaler, summary_writer, 
             optimizer.zero_grad()
             if args.rank == 0:
                 summary_writer.add_scalar(
-                    "loss", loss.item(), int(epoch * iters_per_epoch/args.grad_accum) + i)
+                    "loss", loss.item(), cur_iters)
                 summary_writer.add_scalar(
-                    "lr", cur_lr, int(epoch * iters_per_epoch/args.grad_accum) + i)
+                    "lr", cur_lr, cur_iters)
                 summary_writer.add_scalar(
-                    "moco_momentum", moco_m_global, int(epoch * iters_per_epoch/args.grad_accum) + i)
+                    "moco_momentum", moco_m_global, cur_iters)
             if not skip_lr_sched:
                 lr_scheduler.step()
 
