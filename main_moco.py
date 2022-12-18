@@ -254,9 +254,9 @@ def main_worker(gpu, ngpus_per_node, args):
         builtins.print = print_pass
 
     if args.multiprocessing_distributed:
-        print("Use GPU: {} for printing".format(args.gpu))
+        print(f"Use GPU: {args.gpu} for printing")
     elif args.multiprocessing_distributed is False and args.gpu is not None:
-        print("Use GPU: {} for traning".format(args.gpu))
+        print(f"Use GPU: {args.gpu} for traning")
 
     if args.distributed:
         if args.dist_url == "env://" and args.rank == -1:
@@ -285,7 +285,7 @@ def main_worker(gpu, ngpus_per_node, args):
     tb.add_row(["Loss mode", args.loss_mode])
 
     # create model
-    print("=> creating model '{}'".format(args.arch))
+    print(f"=> creating model '{args.arch}'")
     tb.add_row(["arch", args.arch])
     if args.arch.startswith('swin'):
         # Unlike moco whose pretrained weights contain both base and momentum encoder,
@@ -488,12 +488,12 @@ def main_worker(gpu, ngpus_per_node, args):
     global moco_m_global
     if args.resume:
         if os.path.isfile(args.resume):
-            print("=> loading checkpoint '{}'".format(args.resume))
+            print(f"=> loading checkpoint '{args.resume}'")
             if args.gpu is None:
                 checkpoint = torch.load(args.resume)
             else:
                 # Map model to be loaded to specified single gpu.
-                loc = 'cuda:{}'.format(args.gpu)
+                loc = f"cuda:{args.gpu}"
                 checkpoint = torch.load(args.resume, map_location=loc)
             args.start_epoch = checkpoint['epoch']
             model.load_state_dict(checkpoint['state_dict'])
@@ -509,7 +509,8 @@ def main_worker(gpu, ngpus_per_node, args):
             print(f"=> no checkpoint found at '{args.resume}'")
 
     training_start_ts = time.time()
-    if not args.resume: moco_m_global = args.moco_m
+    if not args.resume:
+        moco_m_global = args.moco_m
     tb.add_row(["moco momentum", moco_m_global])
     ckpt_path = os.path.join(args.output_dir, "ckpt",
                              dataset_str,
