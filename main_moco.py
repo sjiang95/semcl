@@ -384,29 +384,6 @@ def main_worker(gpu, ngpus_per_node, args):
     summary_writer = SummaryWriter(comment=summary_writer_str, filename_suffix=summary_writer_str) if not args.multiprocessing_distributed or (
         args.multiprocessing_distributed and args.rank == 0) else None
 
-    # optionally resume from a checkpoint
-    global moco_m_global
-    if args.resume:
-        if os.path.isfile(args.resume):
-            print("=> loading checkpoint '{}'".format(args.resume))
-            if args.gpu is None:
-                checkpoint = torch.load(args.resume)
-            else:
-                # Map model to be loaded to specified single gpu.
-                loc = 'cuda:{}'.format(args.gpu)
-                checkpoint = torch.load(args.resume, map_location=loc)
-            args.start_epoch = checkpoint['epoch']
-            model.load_state_dict(checkpoint['state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer'])
-            scaler.load_state_dict(checkpoint['scaler'])
-            moco_m_global = checkpoint['moco_moemtum']
-            print(
-                f"=> loaded checkpoint '{args.resume}' (epoch {checkpoint['epoch']})")
-            del checkpoint
-            tb.add_row(["resume", args.resume])
-        else:
-            print(f"=> no checkpoint found at '{args.resume}'")
-
     cudnn.benchmark = True
 
     # Data loading code
@@ -506,6 +483,30 @@ def main_worker(gpu, ngpus_per_node, args):
     pct_start (float): The percentage of the cycle (in number of steps) spent increasing the learning rate.
     """
 
+    # optionally resume from a checkpoint
+    global moco_m_global
+    if args.resume:
+        if os.path.isfile(args.resume):
+            print("=> loading checkpoint '{}'".format(args.resume))
+            if args.gpu is None:
+                checkpoint = torch.load(args.resume)
+            else:
+                # Map model to be loaded to specified single gpu.
+                loc = 'cuda:{}'.format(args.gpu)
+                checkpoint = torch.load(args.resume, map_location=loc)
+            args.start_epoch = checkpoint['epoch']
+            model.load_state_dict(checkpoint['state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
+            scaler.load_state_dict(checkpoint['scaler'])
+            moco_m_global = checkpoint['moco_moemtum']
+            print(
+                f"=> loaded checkpoint '{args.resume}' (epoch {checkpoint['epoch']})")
+            del checkpoint
+            tb.add_row(["resume", args.resume])
+        else:
+            print(f"=> no checkpoint found at '{args.resume}'")
+
     training_start_ts = time.time()
     if not args.resume: moco_m_global = args.moco_m
     tb.add_row(["moco momentum", moco_m_global])
@@ -535,6 +536,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 'arch': args.arch,
                 'state_dict': model.state_dict(),
                 'optimizer': optimizer.state_dict(),
+                'lr_scheduler': lr_scheduler.state_dict(),
                 'scaler': scaler.state_dict(),
                 'moco_moemtum': moco_m_global,
             }, is_best=False, filename=ckpt_path
