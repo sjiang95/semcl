@@ -54,6 +54,8 @@ pretrained_weight_url = {
 }
 moco_m_global = None
 iter_mode_global = None
+forw_backw_iters = None
+num_steps = None
 parser = argparse.ArgumentParser(description='SemCL Pre-Training')
 parser.add_argument('--dataroot', metavar='Path2ContrastivePairs', default='data',
                     help='path to dataset')
@@ -356,15 +358,6 @@ def main_worker(gpu, ngpus_per_node, args):
         optimizer = torch.optim.AdamW(model.parameters(), args.lr,
                                       weight_decay=args.weight_decay)
 
-    # lr scheduler
-    lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(
-        optimizer, max_lr=args.lr, total_steps=args.iters, pct_start=0.125 if args.warmup_ratio is None else args.warmup_ratio)
-    """
-    [OneCycleLR — PyTorch documentation](https://pytorch.org/docs/stable/generated/torch.optim.lr_scheduler.OneCycleLR.html#onecyclelr)
-    The total model update times is determined by args.iters regardless of args.grad_accum
-    pct_start (float): The percentage of the cycle (in number of steps) spent increasing the learning rate.
-    """
-
     scaler = torch.cuda.amp.GradScaler()
 
     list_datasets = args.dataset
@@ -395,7 +388,7 @@ def main_worker(gpu, ngpus_per_node, args):
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             scaler.load_state_dict(checkpoint['scaler'])
-            moco_m_global=checkpoint['moco_moemtum']
+            moco_m_global = checkpoint['moco_moemtum']
             print(
                 f"=> loaded checkpoint '{args.resume}' (epoch {checkpoint['epoch']})")
             del checkpoint
@@ -471,7 +464,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     iters_per_epoch = len(train_loader)
 
-    forw_backw_iters = None
+    global forw_backw_iters
     if args.epochs is None:
         # The total iterations should be extend for {args.grad_accum} times, since we do one optimizer step every {args.grad_accum} iters.
         # forward-backward iteration = update_iter*grad_accum
@@ -480,9 +473,20 @@ def main_worker(gpu, ngpus_per_node, args):
     else:  # use the set epoch to calculate total iters
         # num epochs is unrelated to grad_accum. The model would be updated for args.epochs*iters_per_epoch/args.grad_accum times.
         forw_backw_iters = args.epochs*iters_per_epoch
+    global num_steps
+    num_steps = int(forw_backw_iters/args.grad_accum)
     if args.grad_accum > 1:
         print(
-            f"Due to gradient accumulation {args.grad_accum}, the total forward-backward iteration is {forw_backw_iters} (~{args.epochs} epochs), which is equivalent to update the model for {args.iters} iterations as user specified with batchsize (grad_accum*batch_size=) {equiv_batch_size}).")
+            f"Due to gradient accumulation {args.grad_accum}, the total forward-backward iteration is {forw_backw_iters} (~{args.epochs} epochs), which is equivalent to update the model for {num_steps} iterations as user specified with batchsize (grad_accum*batch_size=) {equiv_batch_size}).")
+
+    # lr scheduler
+    lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(
+        optimizer, max_lr=args.lr, total_steps=num_steps, pct_start=0.125 if args.warmup_ratio is None else args.warmup_ratio)
+    """
+    [OneCycleLR — PyTorch documentation](https://pytorch.org/docs/stable/generated/torch.optim.lr_scheduler.OneCycleLR.html#onecyclelr)
+    The total model update times is determined by args.iters regardless of args.grad_accum
+    pct_start (float): The percentage of the cycle (in number of steps) spent increasing the learning rate.
+    """
 
     training_start_ts = time.time()
     moco_m_global = args.moco_m
@@ -503,7 +507,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                      args.arch,
                                      args.loss_mode,
                                      f"batchsize{equiv_batch_size:04d}",
-                                     f"{dataset_str}_{args.arch}{('os'+str(args.output_stride)) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{args.epochs:04d}ep{(args.iters if args.epochs is None else int(forw_backw_iters/args.grad_accum))}itbatchsize{equiv_batch_size:04d}_crop{args.cropsize}.pth.tar")
+                                     f"{dataset_str}_{args.arch}{('os'+str(args.output_stride)) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{args.epochs:04d}ep{(args.iters if args.epochs is None else num_steps)}itbatchsize{equiv_batch_size:04d}_crop{args.cropsize}.pth.tar")
             save_checkpoint({
                 'epoch': epoch + 1,
                 'arch': args.arch,
@@ -538,7 +542,7 @@ def train(train_loader, model, optimizer, lr_scheduler, scaler, summary_writer, 
     losses = AverageMeter('Loss', ':.4e')
     moco_momentum = AverageMeter('moco_momemtum', ':.8e')
     progress = ProgressMeter(
-        args.iters*args.grad_accum,  # num update iters is determined by user-defined iteration regardless of grad_accum. But forward-backward iteration is args.iters*args.grad_accum
+        forw_backw_iters,  # num update iters is determined by user-defined iteration regardless of grad_accum. But forward-backward iteration is forw_backw_iters
         [batch_time, data_time, learning_rates, losses, moco_momentum],
         prefix=f"Epoch: [{epoch}]")
 
