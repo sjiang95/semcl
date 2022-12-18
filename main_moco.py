@@ -323,6 +323,7 @@ def main_worker(gpu, ngpus_per_node, args):
     tb.add_row(["batch size", equiv_batch_size])
 
     # infer learning rate before changing batch size
+    tb.add_row(["user specified lr", args.lr])
     args.lr = args.lr * equiv_batch_size / 256
     tb.add_row(["scaled lr", args.lr])
 
