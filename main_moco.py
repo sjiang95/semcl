@@ -636,7 +636,7 @@ def train(train_loader, model, optimizer, lr_scheduler, scaler, summary_writer, 
         end = time.time()
 
         # print progress at args.print_freq and epoch start
-        if cur_iters % args.print_freq == 0 or i == 0:
+        if cur_iters % args.print_freq == 0 or i == 0 or i == iters_per_epoch-1:
             progress.display(cur_iters)
 
 
