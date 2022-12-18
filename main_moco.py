@@ -53,6 +53,7 @@ pretrained_weight_url = {
     'swin_large': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_large_patch4_window7_224_22k.pth',
 }
 moco_m_global = None
+iter_mode_global = None
 parser = argparse.ArgumentParser(description='SemCL Pre-Training')
 parser.add_argument('--dataroot', metavar='Path2ContrastivePairs', default='data',
                     help='path to dataset')
@@ -69,8 +70,6 @@ parser.add_argument('-e', '--epochs', default=None, type=int, metavar='num_epoch
                     help='number of total epochs to run')
 parser.add_argument('--iters', default=None, type=int, metavar='num_iter',
                     help='number of total iterations to update the model')
-parser.add_argument('--iter-mode', type=str,
-                    help='Iteration mode: total iters or total epochs')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='start_epoch',
                     help='manual epoch number (useful on restarts)')
 parser.add_argument('--cropsize', default=224, type=int, metavar='cropsize',
@@ -178,18 +177,19 @@ def main():
     if args.dist_url == "env://" and args.world_size == -1:
         args.world_size = int(os.environ["WORLD_SIZE"])
 
+    global iter_mode_global
     if args.iters is not None and args.epochs is not None:
         raise AssertionError(
             "You can set either `--iters` or `--epochs`, not both.")
     elif args.iters is not None and args.epochs is None:
-        args.iter_mode = 'iters'
+        iter_mode_global = 'iters'
     elif args.iters is None and args.epochs is not None:
-        args.iter_mode = 'epochs'
+        iter_mode_global = 'epochs'
     elif args.iters is None and args.epochs is None:
         args.iters = 30000
         print(
             f"Neither `--iters` nor `--epochs` is given, set total iterations to {args.iters}")
-        args.iter_mode = 'iters'
+        iter_mode_global = 'iters'
 
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
 
@@ -552,7 +552,7 @@ def train(train_loader, model, optimizer, lr_scheduler, scaler, summary_writer, 
         # check iterations
         cur_iters = epoch*iters_per_epoch+i
         # use condition i>=iters_per_epoch to remove tail mini-batch if iters_per_epoch cannot be evenly divided by args.grad_accum
-        if (args.iter_mode == 'iters' and cur_iters >= args.iters) or i >= iters_per_epoch:
+        if (iter_mode_global == 'iters' and cur_iters >= args.iters) or i >= iters_per_epoch:
             progress.display(cur_iters-1)  # print status of last iteration
             break
 
