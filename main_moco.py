@@ -65,7 +65,7 @@ parser.add_argument('--pretrained', default='', type=str, metavar='PATH2pretrain
                     help="Path to pretrained weights having same architecture with --arch option.")
 parser.add_argument('-j', '--workers', default=multiprocessing.cpu_count(), type=int, metavar='num_workers_per_gpu',
                     help='number of data loading workers (default: use multiprocessing.cpu_count() for every GPU)')
-parser.add_argument('--epochs', default=None, type=int, metavar='num_epoch',
+parser.add_argument('-e', '--epochs', default=None, type=int, metavar='num_epoch',
                     help='number of total epochs to run')
 parser.add_argument('--iters', default=None, type=int, metavar='num_iter',
                     help='number of total iterations to update the model')
