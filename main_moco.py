@@ -249,7 +249,7 @@ def main_worker(gpu, ngpus_per_node, args):
     args.gpu = gpu
     global tb
     # suppress printing if not first GPU on each node
-    if args.multiprocessing_distributed and (args.gpu != 0 or args.rank != 0):
+    if args.multiprocessing_distributed and args.gpu != 0:
         def print_pass(*args):
             pass
         builtins.print = print_pass
@@ -512,7 +512,6 @@ def main_worker(gpu, ngpus_per_node, args):
         else:
             print(f"=> no checkpoint found at '{args.resume}'")
 
-    training_start_ts = time.time()
     if not args.resume:
         moco_m_global = args.moco_m
     tb.add_row(["moco momentum", moco_m_global])
@@ -525,6 +524,14 @@ def main_worker(gpu, ngpus_per_node, args):
     print(f"Checkpoints will be saved to {ckpt_path}.")
     tb.add_row(["save ckpt to", ckpt_path])
     print(f"Training config summary:\n{tb}")
+
+    # suppress printing if not first GPU on first node
+    if args.multiprocessing_distributed and (args.gpu != 0 or args.rank != 0):
+        def print_pass(*args):
+            pass
+        builtins.print = print_pass
+        
+    training_start_ts = time.time()
     for epoch in range(args.start_epoch, args.epochs):
         epoch_start = datetime.now()
         print(f"{epoch_start}: Start epoch {epoch}/{args.epochs}.")
