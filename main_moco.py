@@ -161,6 +161,7 @@ tb = PrettyTable(field_names=["key", "value"])
 
 
 def main():
+    global tb
     start_time = datetime.now()
     print(f"{start_time.strftime('%Y/%m/%d %H:%M:%S.%f')}: Training started.")
     print(f"Use Pytorch {torch.__version__} with cuda {torch.version.cuda}")
@@ -246,7 +247,7 @@ def main():
 
 def main_worker(gpu, ngpus_per_node, args):
     args.gpu = gpu
-
+    global tb
     # suppress printing if not first GPU on each node
     if args.multiprocessing_distributed and (args.gpu != 0 or args.rank != 0):
         def print_pass(*args):
@@ -264,6 +265,7 @@ def main_worker(gpu, ngpus_per_node, args):
         if args.multiprocessing_distributed:
             # For multiprocessing distributed training, rank needs to be the
             # global rank among all the processes
+            tb.add_row(["DDP node rank", args.rank])
             args.rank = args.rank * ngpus_per_node + gpu
         print(
             f"[DDP] Attempt to initialize init_process_group() via {args.dist_url} with backend {args.dist_backend}")
@@ -295,6 +297,7 @@ def main_worker(gpu, ngpus_per_node, args):
                     args.arch], pretrained=args.pretrained),
             args.moco_dim, args.moco_mlp_dim, args.moco_t, args.loss_mode
         )
+        tb.add_row(["Initialize by", args.pretrained])
         args.output_stride == None
     else:
         print(f"output_stride is {args.output_stride}.")
@@ -703,6 +706,7 @@ def load_moco_backbone(backbone: nn.Module, args):
     linear_keyword = 'fc'
     # load state_dict
     checkpoint = torch.load(args.pretrained, map_location="cpu")
+    tb.add_row(["Initialize by", args.pretrained])
     if args.arch == 'resnet50':
         # rename moco pre-trained keys
         state_dict = checkpoint['state_dict']
