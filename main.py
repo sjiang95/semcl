@@ -161,8 +161,8 @@ parser.add_argument("--output-stride", default=None, choices=[None, 8, 16],
 tb = PrettyTable(field_names=["key", "value"])
 
 
+start_time = datetime.now()
 def main():
-    start_time = datetime.now()
     print(f"{start_time.strftime('%Y/%m/%d %H:%M:%S.%f')}: Training started.")
     print(f"Use Pytorch {torch.__version__} with cuda {torch.version.cuda}")
     args = parser.parse_args()
@@ -484,8 +484,8 @@ def main_worker(gpu, ngpus_per_node, args):
                                  args.loss_mode,
                                  f"batchsize{equiv_batch_size:04d}")
     log_file_name = os.path.join(log_path,
-                                 f"{dataset_str}_{args.arch}{('os'+str(args.output_stride)) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{args.epochs:04d}ep{(args.iters if args.epochs is None else num_steps)}itbatchsize{equiv_batch_size:04d}_crop{args.cropsize}.log")
-    logger = get_logger(name="semclTraining", log_file=log_file_name, file_mode='a')
+                                 f"{start_time.strftime('%Y%m%d_%H%M%S')}_{dataset_str}_{args.arch}{('os'+str(args.output_stride)) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{args.epochs:04d}ep{(args.iters if args.epochs is None else num_steps)}itbatchsize{equiv_batch_size:04d}_crop{args.cropsize}.log")
+    logger = get_logger(name="semclTraining", log_file=log_file_name)
 
     summary_writer = SummaryWriter(
         log_dir=os.path.join("work_dirs",
