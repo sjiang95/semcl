@@ -13,6 +13,7 @@ from functools import partial
 import multiprocessing
 import requests
 from prettytable import PrettyTable
+from utils.logging import get_logger
 
 import torch
 import torch.nn as nn
@@ -383,11 +384,6 @@ def main_worker(gpu, ngpus_per_node, args):
         else:
             dataset_str = dataset_str+dataset+"N"
 
-    summary_writer_str = ('%s_%s_%s_batchsize%04d' % (
-        dataset_str, args.arch, args.loss_mode, equiv_batch_size))
-    summary_writer = SummaryWriter(comment=summary_writer_str, filename_suffix=summary_writer_str) if not args.multiprocessing_distributed or (
-        args.multiprocessing_distributed and args.rank == 0) else None
-
     cudnn.benchmark = True
 
     # Data loading code
@@ -457,7 +453,8 @@ def main_worker(gpu, ngpus_per_node, args):
         num_workers=args.workers, pin_memory=True, sampler=train_sampler, drop_last=True)
 
     # use the following expression to remove tail mini-batch if len(train_loader) cannot be evenly divided by args.grad_accum
-    iters_per_epoch = math.floor(len(train_loader)/args.grad_accum)*args.grad_accum
+    iters_per_epoch = math.floor(
+        len(train_loader)/args.grad_accum)*args.grad_accum
 
     global forw_backw_iters
     if args.epochs is None:
@@ -479,6 +476,26 @@ def main_worker(gpu, ngpus_per_node, args):
         ["iters(update steps)", num_steps]
     ])
 
+    # logger
+    log_file_name = os.path.join("work_dirs",
+                                 dataset_str,
+                                 args.arch,
+                                 args.loss_mode,
+                                 f"batchsize{equiv_batch_size:04d}",
+                                 f"{dataset_str}_{args.arch}{('os'+str(args.output_stride)) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{args.epochs:04d}ep{(args.iters if args.epochs is None else num_steps)}itbatchsize{equiv_batch_size:04d}_crop{args.cropsize}.log")
+    logger = get_logger(log_file=log_file_name)
+
+    summary_writer = SummaryWriter(
+        log_dir=os.path.join("work_dirs",
+                             dataset_str,
+                             args.arch,
+                             args.loss_mode,
+                             f"batchsize{equiv_batch_size:04d}",
+                             ),
+        filename_suffix=f"{args.arch}{('os'+str(args.output_stride)) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{args.epochs:04d}ep{(args.iters if args.epochs is None else num_steps)}itbatchsize{equiv_batch_size:04d}_crop{args.cropsize}"
+    ) if not args.multiprocessing_distributed or (
+        args.multiprocessing_distributed and args.rank == 0) else None
+
     # lr scheduler
     lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(
         optimizer, max_lr=args.lr, total_steps=num_steps, pct_start=0.125 if args.warmup_ratio is None else args.warmup_ratio)
@@ -492,7 +509,7 @@ def main_worker(gpu, ngpus_per_node, args):
     global moco_m_global
     if args.resume:
         if os.path.isfile(args.resume):
-            print(f"=> loading checkpoint '{args.resume}'")
+            logger.info(f"=> loading checkpoint '{args.resume}'")
             if args.gpu is None:
                 checkpoint = torch.load(args.resume)
             else:
@@ -505,12 +522,12 @@ def main_worker(gpu, ngpus_per_node, args):
             lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
             scaler.load_state_dict(checkpoint['scaler'])
             moco_m_global = checkpoint['moco_moemtum']
-            print(
+            logger.info(
                 f"=> loaded checkpoint '{args.resume}' (epoch {checkpoint['epoch']})")
             del checkpoint
             tb.add_row(["resume", args.resume])
         else:
-            print(f"=> no checkpoint found at '{args.resume}'")
+            logger.info(f"=> no checkpoint found at '{args.resume}'")
 
     if not args.resume:
         moco_m_global = args.moco_m
@@ -521,20 +538,20 @@ def main_worker(gpu, ngpus_per_node, args):
                              args.loss_mode,
                              f"batchsize{equiv_batch_size:04d}",
                              f"{dataset_str}_{args.arch}{('os'+str(args.output_stride)) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{args.epochs:04d}ep{(args.iters if args.epochs is None else num_steps)}itbatchsize{equiv_batch_size:04d}_crop{args.cropsize}.pth.tar")
-    print(f"Checkpoints will be saved to {ckpt_path}.")
+    logger.info(f"Checkpoints will be saved to {ckpt_path}.")
     tb.add_row(["save ckpt to", ckpt_path])
-    print(f"Training config summary:\n{tb}")
+    logger.info(f"Training config summary:\n{tb}")
 
     # suppress printing if not first GPU on first node
     if args.multiprocessing_distributed and (args.gpu != 0 or args.rank != 0):
         def print_pass(*args):
             pass
         builtins.print = print_pass
-        
+
     training_start_ts = time.time()
     for epoch in range(args.start_epoch, args.epochs):
         epoch_start = datetime.now()
-        print(f"{epoch_start}: Start epoch {epoch}/{args.epochs}.")
+        logger.info(f"{epoch_start}: Start epoch {epoch}/{args.epochs}.")
         if args.distributed:
             train_sampler.set_epoch(epoch)
 
@@ -554,25 +571,25 @@ def main_worker(gpu, ngpus_per_node, args):
                 'moco_moemtum': moco_m_global,
             }, is_best=False, filename=ckpt_path
             )
-            print(
+            logger.info(
                 f"{datetime.now()}: Save checkpoint of epoch {epoch} to {os.path.abspath(ckpt_path)}")
 
             epoch_end = datetime.now()
-            print(
+            logger.info(
                 f"Epoch {epoch}/{args.epochs} takes {epoch_end-epoch_start}.")
             epoch_end_ts = time.time()
             # calculate ETA (estimated time of arrival)
             training_dur = epoch_end_ts-training_start_ts
             eta = datetime.fromtimestamp(time.time()+training_dur/(
                 (epoch+1-args.start_epoch)*iters_per_epoch)*(forw_backw_iters-1-(epoch+1)*iters_per_epoch))
-            print(f"[ETA] {eta}, {time.tzname[0]}")
-            print()
+            logger.info(f"[ETA] {eta}, {time.tzname[0]}")
+            logger.info()
 
     if not args.multiprocessing_distributed or args.rank == 0:
         summary_writer.close()
 
 
-def train(train_loader, model, optimizer, lr_scheduler, scaler, summary_writer, epoch, args):
+def train(train_loader, model, optimizer, lr_scheduler, scaler, summary_writer, epoch, args, logger):
     batch_time = AverageMeter('BatchTime', ':6.3f')
     data_time = AverageMeter('DataTime', ':6.3f')
     learning_rates = AverageMeter('LR', ':.4e')
@@ -581,6 +598,7 @@ def train(train_loader, model, optimizer, lr_scheduler, scaler, summary_writer, 
     progress = ProgressMeter(
         forw_backw_iters,  # num update iters is determined by user-defined iteration regardless of grad_accum. But forward-backward iteration is forw_backw_iters
         [batch_time, data_time, learning_rates, losses, moco_momentum],
+        logger=logger,
         prefix=f"Epoch: [{epoch}]")
 
     # switch to train mode
@@ -588,7 +606,8 @@ def train(train_loader, model, optimizer, lr_scheduler, scaler, summary_writer, 
 
     end = time.time()
     # use condition i >= math.floor(iters_per_epoch/args.grad_accum)*args.grad_accum to remove tail mini-batch if iters_per_epoch cannot be evenly divided by args.grad_accum
-    iters_per_epoch = math.floor(len(train_loader)/args.grad_accum)*args.grad_accum
+    iters_per_epoch = math.floor(
+        len(train_loader)/args.grad_accum)*args.grad_accum
     global moco_m_global
     for i, (anchor_images, nanchor_images) in enumerate(train_loader):
         # measure data loading time
@@ -686,15 +705,16 @@ class AverageMeter(object):
 
 
 class ProgressMeter(object):
-    def __init__(self, num_batches, meters, prefix=""):
+    def __init__(self, num_batches, meters, logger, prefix="",):
         self.batch_fmtstr = self._get_batch_fmtstr(num_batches)
         self.meters = meters
         self.prefix = prefix
+        self.logger = logger
 
     def display(self, batch):
         entries = [self.prefix + self.batch_fmtstr.format(batch)]
         entries += [str(meter) for meter in self.meters]
-        print('\t'.join(entries))
+        self.logger.info('\t'.join(entries))
 
     def _get_batch_fmtstr(self, num_batches):
         num_digits = len(str(num_batches // 1))
