@@ -485,7 +485,7 @@ def main_worker(gpu, ngpus_per_node, args):
     if not os.path.exists(log_path): os.makedirs(log_path)
     log_file_name = os.path.join(log_path,
                                  f"{dataset_str}_{args.arch}{('os'+str(args.output_stride)) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{args.epochs:04d}ep{(args.iters if args.epochs is None else num_steps)}itbatchsize{equiv_batch_size:04d}_crop{args.cropsize}.log")
-    logger = get_logger(name="semclTraining", log_file=log_file_name)
+    logger = get_logger(name="semclTraining", log_file=log_file_name, file_mode='a')
 
     summary_writer = SummaryWriter(
         log_dir=os.path.join("work_dirs",
