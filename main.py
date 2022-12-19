@@ -162,7 +162,6 @@ tb = PrettyTable(field_names=["key", "value"])
 
 
 def main():
-    global tb
     start_time = datetime.now()
     print(f"{start_time.strftime('%Y/%m/%d %H:%M:%S.%f')}: Training started.")
     print(f"Use Pytorch {torch.__version__} with cuda {torch.version.cuda}")
@@ -206,6 +205,7 @@ def main():
 
     # Retrieve pretrained weights
     if len(args.pretrained) == 0:
+        global tb
         pretrained_weights_filename = pretrained_weight_url.copy()
         for one_key, one_value in pretrained_weights_filename.items():
             pretrained_weights_filename[one_key] = str(
@@ -227,6 +227,7 @@ def main():
         tb.add_row(["Initialize by", args.pretrained])
 
     if args.multiprocessing_distributed:
+        global tb
         # Since we have ngpus_per_node processes per node, the total world_size
         # needs to be adjusted accordingly
         args.world_size = ngpus_per_node * args.world_size
