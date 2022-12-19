@@ -203,9 +203,9 @@ def main():
 
     ngpus_per_node = torch.cuda.device_count()
 
+    global tb
     # Retrieve pretrained weights
     if len(args.pretrained) == 0:
-        global tb
         pretrained_weights_filename = pretrained_weight_url.copy()
         for one_key, one_value in pretrained_weights_filename.items():
             pretrained_weights_filename[one_key] = str(
@@ -227,11 +227,9 @@ def main():
         tb.add_row(["Initialize by", args.pretrained])
 
     if args.multiprocessing_distributed:
-        global tb
         # Since we have ngpus_per_node processes per node, the total world_size
         # needs to be adjusted accordingly
         args.world_size = ngpus_per_node * args.world_size
-        tb.add_row(["DDP world_size", args.world_size])
         args.workers = args.workers//ngpus_per_node
         # Use torch.multiprocessing.spawn to launch distributed processes: the
         # main_worker process function
@@ -354,6 +352,8 @@ def main_worker(gpu, ngpus_per_node, args):
             # DistributedDataParallel will divide and allocate batch_size to all
             # available GPUs if device_ids are not set
             model = torch.nn.parallel.DistributedDataParallel(model)
+        tb.add_row(["DDP world_size", args.world_size])
+        
     elif args.gpu is not None:
         torch.cuda.set_device(args.gpu)
         model = model.cuda(args.gpu)
