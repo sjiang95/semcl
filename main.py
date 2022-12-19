@@ -586,7 +586,7 @@ def main_worker(gpu, ngpus_per_node, args):
             eta = datetime.fromtimestamp(time.time()+training_dur/(
                 (epoch+1-args.start_epoch)*iters_per_epoch)*(forw_backw_iters-1-(epoch+1)*iters_per_epoch))
             logger.info(f"[ETA] {eta}, {time.tzname[0]}")
-            logger.info()
+            print()
 
     if not args.multiprocessing_distributed or args.rank == 0:
         summary_writer.close()
