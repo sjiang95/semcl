@@ -483,7 +483,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                  args.loss_mode,
                                  f"batchsize{equiv_batch_size:04d}",
                                  f"{dataset_str}_{args.arch}{('os'+str(args.output_stride)) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{args.epochs:04d}ep{(args.iters if args.epochs is None else num_steps)}itbatchsize{equiv_batch_size:04d}_crop{args.cropsize}.log")
-    logger = get_logger(log_file=log_file_name)
+    logger = get_logger(name="semclTraining", log_file=log_file_name)
 
     summary_writer = SummaryWriter(
         log_dir=os.path.join("work_dirs",
