@@ -559,7 +559,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
         # train for one epoch
         train(train_loader, model, optimizer, lr_scheduler,
-              scaler, summary_writer, epoch, args)
+              scaler, summary_writer, epoch, args, logger)
 
         # only the first GPU saves checkpoint
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank == 0):
