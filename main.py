@@ -648,7 +648,7 @@ def train(train_loader, model, optimizer, lr_scheduler, scaler, summary_writer, 
             scale = scaler.get_scale()
             scaler.update()
             # To avoid warning: Detected call of lr_scheduler.step() before optimizer.step(). In PyTorch 1.1.0 and later, you should call them in the opposite order: optimizer.step() before lr_scheduler.step(). Failure to do this will result in PyTorch skipping the first value of the learning rate schedule.
-            # Solution: https://discuss.pytorch.org/t/optimizer-step-before-lr-scheduler-step-error-using-gradscaler/92930/10?u=qsj287068067
+            # Solution: https://discuss.pytorch.org/t/optimizer-step-before-lr-scheduler-step-error-using-gradscaler/92930/10
             skip_lr_sched = (scale > scaler.get_scale())
             # Reset gradients tensors only if we have done a step. See https://gist.github.com/thomwolf/ac7a7da6b1888c2eeac8ac8b9b05d3d3?permalink_comment_id=2921188#gistcomment-2921188. And https://pytorch.org/docs/stable/notes/amp_examples.html#gradient-accumulation.
             optimizer.zero_grad()
