@@ -1,5 +1,6 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import logging
+import os
 
 import torch.distributed as dist
 
@@ -62,6 +63,8 @@ def get_logger(name, log_file=None, log_level=logging.INFO, file_mode='w'):
         # Here, the default behaviour of the official logger is 'a'. Thus, we
         # provide an interface to change the file mode to the default
         # behaviour.
+        log_path=os.path.dirname(log_file)
+        if not os.path.exists(log_path): os.makedirs(log_path)
         file_handler = logging.FileHandler(log_file, file_mode)
         handlers.append(file_handler)
 
