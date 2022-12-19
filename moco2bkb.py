@@ -17,19 +17,6 @@ torchvision_model_names = sorted(name for name in torchvision_models.__dict__
     and callable(torchvision_models.__dict__[name]))
 model_names = ['swin_tiny', 'swin_small', 'swin_base', 'swin_large'] + torchvision_model_names
 
-parser = argparse.ArgumentParser(description='MoCo ImageNet Pre-Training')
-parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet50',
-                    choices=model_names,
-                    help='model architecture: ' +
-                        ' | '.join(model_names) +
-                        ' (default: resnet50)')
-parser.add_argument("--output-stride", type=int, default=-1, choices=[-1, 8, 16],
-                    help="This option is valid for only resnet backbones. -1: no output stride (default resnets).")
-parser.add_argument('full_ckpt',default='',type=str, metavar='PATH',
-                    help="Path to pretrained weights having same architecture with --arch option.")
-parser.add_argument('--summary-only', action='store_true',
-                    help='Print backbone summary without saving.')
-
 def load_moco_backbone(backbone:nn.Module, linear_keyword,args):
     #load state_dict
     checkpoint = torch.load(args.full_ckpt, map_location= "cpu")
@@ -60,12 +47,10 @@ def save_checkpoint(state, filename='checkpoint.pth.tar'):
 
     torch.save(state, filename)
 
-def moco2bkb():
+def moco2bkb(args):
     r"""moco2bkb
     Use this function to extract base encoder backbone from pretrained weights
     """
-    args = parser.parse_args()
-
     # Retrieve pretrained weights
     assert (len(args.full_ckpt)>0), "You have to specify pretrained ckpt path."
     # check existence of full ckpt
@@ -103,4 +88,18 @@ def moco2bkb():
             ,filename=bkb_filename)
 
 if __name__ == '__main__':
-    moco2bkb()
+    parser = argparse.ArgumentParser(description='MoCo ImageNet Pre-Training')
+    parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet50',
+                        choices=model_names,
+                        help='model architecture: ' +
+                            ' | '.join(model_names) +
+                            ' (default: resnet50)')
+    parser.add_argument("--output-stride", type=int, default=-1, choices=[-1, 8, 16],
+                        help="This option is valid for only resnet backbones. -1: no output stride (default resnets).")
+    parser.add_argument('full_ckpt',default='',type=str, metavar='PATH',
+                        help="Path to pretrained weights having same architecture with --arch option.")
+    parser.add_argument('--summary-only', action='store_true',
+                        help='Print backbone summary without saving.')
+    args = parser.parse_args()
+
+    moco2bkb(args)
