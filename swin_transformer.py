@@ -590,34 +590,38 @@ class SwinTransformer(nn.Module):
         flops += self.num_features * self.num_classes
         return flops
 
-def swin_tiny(pretrained:str='',**kwargs):
-    model=SwinTransformer(num_classes=21841, drop_path_rate=0.1,embed_dim=96,depths=[ 2, 2, 6, 2 ],num_heads=[ 3, 6, 12, 24 ],window_size=7)
-    if len(pretrained)>0:
-        swin_ckpt = torch.load(pretrained, map_location="cpu")
-        swin_state_dict = swin_ckpt['model']
-        model.load_state_dict(swin_state_dict)
+
+def swin_tiny(state_dict=None):
+    model = SwinTransformer(num_classes=21841, drop_path_rate=0.1, embed_dim=96, depths=[
+                            2, 2, 6, 2], num_heads=[3, 6, 12, 24], window_size=7)
+    if state_dict is not None:
+        msg = model.load_state_dict(state_dict, strict=False)
+        print(f"Load pretrained swin_tiny weights with unmatched keys: {msg}")
     return model
 
-def swin_small(pretrained:str='',**kwargs):
-    model=SwinTransformer(num_classes=21841, drop_path_rate=0.2,embed_dim=96,depths=[ 2, 2, 18, 2 ],num_heads=[ 3, 6, 12, 24 ],window_size=7)
-    if len(pretrained)>0:
-        swin_ckpt = torch.load(pretrained, map_location="cpu")
-        swin_state_dict = swin_ckpt['model']
-        model.load_state_dict(swin_state_dict)
+
+def swin_small(state_dict=None):
+    model = SwinTransformer(num_classes=21841, drop_path_rate=0.2, embed_dim=96, depths=[
+                            2, 2, 18, 2], num_heads=[3, 6, 12, 24], window_size=7)
+    if state_dict is not None:
+        msg = model.load_state_dict(state_dict, strict=False)
+        print(f"Load pretrained swin_small weights with unmatched keys: {msg}")
     return model
 
-def swin_base(pretrained:str='',**kwargs):
-    model=SwinTransformer(num_classes=21841, drop_path_rate=0.2,embed_dim=128,depths=[ 2, 2, 18, 2 ],num_heads=[ 4, 8, 16, 32 ],window_size=7) #for 22k model, the num_class is 21841
-    if len(pretrained)>0:
-        swin_ckpt = torch.load(pretrained, map_location="cpu")
-        swin_state_dict = swin_ckpt['model']
-        model.load_state_dict(swin_state_dict)
+
+def swin_base(state_dict=None):
+    model = SwinTransformer(num_classes=21841, drop_path_rate=0.2, embed_dim=128, depths=[
+                            2, 2, 18, 2], num_heads=[4, 8, 16, 32], window_size=7)  # for 22k model, the num_class is 21841
+    if state_dict is not None:
+        msg = model.load_state_dict(state_dict, strict=False)
+        print(f"Load pretrained swin_base weights with unmatched keys: {msg}")
     return model
 
-def swin_large(pretrained:str='',**kwargs):
-    model=SwinTransformer(num_classes=21841, drop_path_rate=0.2,embed_dim=192,depths=[ 2, 2, 18, 2 ],num_heads=[ 6, 12, 24, 48 ],window_size=7) #for 22k model, the num_class is 21841
-    if len(pretrained)>0:
-        swin_ckpt = torch.load(pretrained, map_location="cpu")
-        swin_state_dict = swin_ckpt['model']
-        model.load_state_dict(swin_state_dict)
+
+def swin_large(state_dict=None):
+    model = SwinTransformer(num_classes=21841, drop_path_rate=0.2, embed_dim=192, depths=[
+                            2, 2, 18, 2], num_heads=[6, 12, 24, 48], window_size=7)  # for 22k model, the num_class is 21841
+    if state_dict is not None:
+        msg = model.load_state_dict(state_dict, strict=False)
+        print(f"Load pretrained swin_large weights with unmatched keys: {msg}")
     return model

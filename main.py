@@ -11,7 +11,6 @@ from datetime import datetime
 import warnings
 from functools import partial
 import multiprocessing
-import requests
 from prettytable import PrettyTable
 from utils.logging import get_logger
 
@@ -28,6 +27,7 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchvision.models as torchvision_models
 from torch.utils.tensorboard import SummaryWriter
+from torch.hub import load_state_dict_from_url
 
 import moco.builder
 import moco.loader
@@ -162,6 +162,8 @@ tb = PrettyTable(field_names=["key", "value"])
 
 
 start_time = datetime.now()
+
+
 def main():
     print(f"{start_time.strftime('%Y/%m/%d %H:%M:%S.%f')}: Training started.")
     print(f"Use Pytorch {torch.__version__} with cuda {torch.version.cuda}")
@@ -206,23 +208,7 @@ def main():
     global tb
     # Retrieve pretrained weights
     if len(args.pretrained) == 0:
-        pretrained_weights_filename = pretrained_weight_url.copy()
-        for one_key, one_value in pretrained_weights_filename.items():
-            pretrained_weights_filename[one_key] = str(
-                one_value).split(sep='/')[-1]
-
-        path_to_pretrained_weights = os.path.join(
-            'pretrained', pretrained_weights_filename[args.arch])
-        if not os.path.exists('pretrained'):
-            os.mkdir('pretrained')
-            download_preweights(pretrained_weight_url,
-                                path_to_pretrained_weights, args.arch)
-        else:
-            # Download dict file if not exists
-            if not os.path.exists(path_to_pretrained_weights):
-                download_preweights(pretrained_weight_url,
-                                    path_to_pretrained_weights, args.arch)
-        args.pretrained = path_to_pretrained_weights
+        args.pretrained = pretrained_weight_url[args.arch]
         print("Use pretrained weight at", args.pretrained)
         tb.add_row(["Initialize by", args.pretrained])
 
@@ -289,12 +275,15 @@ def main_worker(gpu, ngpus_per_node, args):
     # create model
     print(f"=> creating model '{args.arch}'")
     tb.add_row(["arch", args.arch])
+    tb.add_row(["Initialize by", args.pretrained])
     if args.arch.startswith('swin'):
         # Unlike moco whose pretrained weights contain both base and momentum encoder,
         # swin transformer pretrained weights contains only the backbone (base encoder) itself.
+        checkpoint = load_state_dict_from_url(args.pretrained, model_dir="pretrainedIN", map_location="cpu") if args.pretrained.startswith(
+            "http") else torch.load(args.pretrained, map_location="cpu")
         model = moco.builder.MoCo_Swin(
             partial(swin_transformer.__dict__[
-                    args.arch], pretrained=args.pretrained),
+                    args.arch], state_dict=checkpoint["state_dict" if "state_dict" in checkpoint else "model"]),
             args.moco_dim, args.moco_mlp_dim, args.moco_t, args.loss_mode
         )
         tb.add_row(["Initialize by", args.pretrained])
@@ -353,7 +342,7 @@ def main_worker(gpu, ngpus_per_node, args):
             # available GPUs if device_ids are not set
             model = torch.nn.parallel.DistributedDataParallel(model)
         tb.add_row(["DDP world_size", args.world_size])
-        
+
     elif args.gpu is not None:
         torch.cuda.set_device(args.gpu)
         model = model.cuda(args.gpu)
@@ -478,11 +467,11 @@ def main_worker(gpu, ngpus_per_node, args):
     ])
 
     # logger
-    log_path=os.path.join("work_dirs",
-                                 dataset_str,
-                                 args.arch,
-                                 args.loss_mode,
-                                 f"batchsize{equiv_batch_size:04d}")
+    log_path = os.path.join("work_dirs",
+                            dataset_str,
+                            args.arch,
+                            args.loss_mode,
+                            f"batchsize{equiv_batch_size:04d}")
     log_file_name = os.path.join(log_path,
                                  f"{start_time.strftime('%Y%m%d_%H%M%S')}_{dataset_str}_{args.arch}{('os'+str(args.output_stride)) if args.output_stride is not None else ''}_{args.loss_mode}_ecd{args.epochs:04d}ep{(args.iters if args.epochs is None else num_steps)}itbatchsize{equiv_batch_size:04d}_crop{args.cropsize}.log")
     logger = get_logger(name="semclTraining", log_file=log_file_name)
@@ -519,7 +508,8 @@ def main_worker(gpu, ngpus_per_node, args):
                 loc = f"cuda:{args.gpu}"
                 checkpoint = torch.load(args.resume, map_location=loc)
             args.start_epoch = checkpoint['epoch']
-            model.load_state_dict(checkpoint['state_dict'])
+            model.load_state_dict(
+                checkpoint["state_dict" if "state_dict" in checkpoint else "model"])
             optimizer.load_state_dict(checkpoint['optimizer'])
             lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
             scaler.load_state_dict(checkpoint['scaler'])
@@ -530,8 +520,7 @@ def main_worker(gpu, ngpus_per_node, args):
             tb.add_row(["resume", args.resume])
         else:
             logger.info(f"=> no checkpoint found at '{args.resume}'")
-
-    if not args.resume:
+    else:
         moco_m_global = args.moco_m
     tb.add_row(["moco momentum", moco_m_global])
     ckpt_path = os.path.join(args.output_dir, "ckpt",
@@ -566,7 +555,7 @@ def main_worker(gpu, ngpus_per_node, args):
             save_checkpoint({
                 'epoch': epoch + 1,
                 'arch': args.arch,
-                'state_dict': model.state_dict(),
+                'model': model.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'lr_scheduler': lr_scheduler.state_dict(),
                 'scaler': scaler.state_dict(),
@@ -734,7 +723,8 @@ def adjust_moco_momentum(epoch, args):
 def load_moco_backbone(backbone: nn.Module, args):
     linear_keyword = 'fc'
     # load state_dict
-    checkpoint = torch.load(args.pretrained, map_location="cpu")
+    checkpoint = load_state_dict_from_url(args.pretrained, model_dir="pretrainedIN", map_location="cpu") if args.pretrained.startswith(
+        "http") else torch.load(args.pretrained, map_location="cpu")
     tb.add_row(["Initialize by", args.pretrained])
     if args.arch == 'resnet50':
         # rename moco pre-trained keys
@@ -759,18 +749,9 @@ def load_moco_backbone(backbone: nn.Module, args):
             del state_dict[k]
     args.start_epoch = 0
     msg = backbone.load_state_dict(state_dict, strict=False)
-    # assert set(msg.missing_keys) == {"%s.weight" % linear_keyword, "%s.bias" % linear_keyword}, f"Missing keys: {msg.missing_keys}" # comment out this line to debug
+    print(
+        f"Load pretrained {args.arch} weights from {args.pretrained} with unmatched keys: {msg}")
     return backbone
-
-
-def download_preweights(list_url, download_path, key):
-    print("Download pretrained weights for %s backbone from '%s'." %
-          (key, list_url[key]))
-    down_res = requests.get(list_url[key])
-    with open(download_path, 'wb') as file:
-        file.write(down_res.content)
-    print("Download pretrained weights for %s backbone is saved to '%s'." %
-          (key, download_path))
 
 
 if __name__ == '__main__':
