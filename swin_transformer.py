@@ -591,36 +591,36 @@ class SwinTransformer(nn.Module):
         return flops
 
 
-def swin_tiny(state_dict=None):
-    model = SwinTransformer(num_classes=21841, drop_path_rate=0.1, embed_dim=96, depths=[
-                            2, 2, 6, 2], num_heads=[3, 6, 12, 24], window_size=7)
+def swin_tiny(state_dict=None, num_classes=21841, **kwargs):  # for 22k model, the num_class is 21841
+    model = SwinTransformer(num_classes=num_classes, drop_path_rate=0.1, embed_dim=96, depths=[
+                            2, 2, 6, 2], num_heads=[3, 6, 12, 24], window_size=7, **kwargs)
     if state_dict is not None:
         msg = model.load_state_dict(state_dict, strict=False)
         print(f"Load pretrained swin_tiny weights with unmatched keys: {msg}")
     return model
 
 
-def swin_small(state_dict=None):
-    model = SwinTransformer(num_classes=21841, drop_path_rate=0.2, embed_dim=96, depths=[
-                            2, 2, 18, 2], num_heads=[3, 6, 12, 24], window_size=7)
+def swin_small(state_dict=None, num_classes=21841, **kwargs):  # for 22k model, the num_class is 21841
+    model = SwinTransformer(num_classes=num_classes, drop_path_rate=0.2, embed_dim=96, depths=[
+                            2, 2, 18, 2], num_heads=[3, 6, 12, 24], window_size=7, **kwargs)
     if state_dict is not None:
         msg = model.load_state_dict(state_dict, strict=False)
         print(f"Load pretrained swin_small weights with unmatched keys: {msg}")
     return model
 
 
-def swin_base(state_dict=None):
-    model = SwinTransformer(num_classes=21841, drop_path_rate=0.2, embed_dim=128, depths=[
-                            2, 2, 18, 2], num_heads=[4, 8, 16, 32], window_size=7)  # for 22k model, the num_class is 21841
+def swin_base(state_dict=None, num_classes=21841, **kwargs):  # for 22k model, the num_class is 21841
+    model = SwinTransformer(num_classes=num_classes, drop_path_rate=0.2, embed_dim=128, depths=[
+                            2, 2, 18, 2], num_heads=[4, 8, 16, 32], window_size=7, **kwargs)
     if state_dict is not None:
         msg = model.load_state_dict(state_dict, strict=False)
         print(f"Load pretrained swin_base weights with unmatched keys: {msg}")
     return model
 
 
-def swin_large(state_dict=None):
-    model = SwinTransformer(num_classes=21841, drop_path_rate=0.2, embed_dim=192, depths=[
-                            2, 2, 18, 2], num_heads=[6, 12, 24, 48], window_size=7)  # for 22k model, the num_class is 21841
+def swin_large(state_dict=None, num_classes=21841, **kwargs):  # for 22k model, the num_class is 21841
+    model = SwinTransformer(num_classes=num_classes, drop_path_rate=0.2, embed_dim=192, depths=[
+                            2, 2, 18, 2], num_heads=[6, 12, 24, 48], window_size=7, **kwargs)
     if state_dict is not None:
         msg = model.load_state_dict(state_dict, strict=False)
         print(f"Load pretrained swin_large weights with unmatched keys: {msg}")
