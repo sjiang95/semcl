@@ -281,9 +281,12 @@ def main_worker(gpu, ngpus_per_node, args):
         # swin transformer pretrained weights contains only the backbone (base encoder) itself.
         checkpoint = load_state_dict_from_url(args.pretrained, model_dir="pretrainedIN", map_location="cpu") if args.pretrained.startswith(
             "http") else torch.load(args.pretrained, map_location="cpu")
+        state_dict_model=checkpoint["state_dict" if "state_dict" in checkpoint else "model"]
+        for onekey in list(state_dict_model.keys()):# remove "head"
+            if onekey.startswith("head."): del state_dict_model[onekey]
         model = moco.builder.MoCo_Swin(
             partial(swin_transformer.__dict__[
-                    args.arch], state_dict=checkpoint["state_dict" if "state_dict" in checkpoint else "model"]),
+                    args.arch], state_dict=state_dict_model),
             args.moco_dim, args.moco_mlp_dim, args.moco_t, args.loss_mode
         )
         tb.add_row(["Initialize by", args.pretrained])
