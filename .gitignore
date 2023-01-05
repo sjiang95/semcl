@@ -16,3 +16,4 @@ dataset_conv
 visualize_attention/
 data
 work_dirs
+*.pth
