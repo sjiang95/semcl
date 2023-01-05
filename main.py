@@ -205,12 +205,10 @@ def main():
 
     ngpus_per_node = torch.cuda.device_count()
 
-    global tb
     # Retrieve pretrained weights
     if len(args.pretrained) == 0:
         args.pretrained = pretrained_weight_url[args.arch]
         print("Use pretrained weight at", args.pretrained)
-        tb.add_row(["Initialize by", args.pretrained])
 
     if args.multiprocessing_distributed:
         # Since we have ngpus_per_node processes per node, the total world_size
@@ -260,6 +258,8 @@ def main_worker(gpu, ngpus_per_node, args):
         print("[DDP] init_process_group() is initialized via backend:",
               dist.get_backend())
         dist.barrier()
+        if args.gpu == 0:
+            tb.add_row(["DDP world_size", dist.get_world_size()])
 
     if args.loss_mode == 'paired':
         print("Loss mode: pair-wise infoNCE")
@@ -281,15 +281,15 @@ def main_worker(gpu, ngpus_per_node, args):
         # swin transformer pretrained weights contains only the backbone (base encoder) itself.
         checkpoint = load_state_dict_from_url(args.pretrained, model_dir="pretrainedIN", map_location="cpu") if args.pretrained.startswith(
             "http") else torch.load(args.pretrained, map_location="cpu")
-        state_dict_model=checkpoint["state_dict" if "state_dict" in checkpoint else "model"]
-        for onekey in list(state_dict_model.keys()):# remove "head"
-            if onekey.startswith("head."): del state_dict_model[onekey]
+        state_dict_model = checkpoint["state_dict" if "state_dict" in checkpoint else "model"]
+        for onekey in list(state_dict_model.keys()):  # remove "head"
+            if onekey.startswith("head."):
+                del state_dict_model[onekey]
         model = moco.builder.MoCo_Swin(
             partial(swin_transformer.__dict__[
                     args.arch], state_dict=state_dict_model),
             args.moco_dim, args.moco_mlp_dim, args.moco_t, args.loss_mode
         )
-        tb.add_row(["Initialize by", args.pretrained])
         args.output_stride == None
     else:
         print(f"output_stride is {args.output_stride}.")
@@ -344,7 +344,6 @@ def main_worker(gpu, ngpus_per_node, args):
             # DistributedDataParallel will divide and allocate batch_size to all
             # available GPUs if device_ids are not set
             model = torch.nn.parallel.DistributedDataParallel(model)
-        tb.add_row(["DDP world_size", args.world_size])
 
     elif args.gpu is not None:
         torch.cuda.set_device(args.gpu)
@@ -728,7 +727,8 @@ def load_moco_backbone(backbone: nn.Module, args):
     # load state_dict
     checkpoint = load_state_dict_from_url(args.pretrained, model_dir="pretrainedIN", map_location="cpu") if args.pretrained.startswith(
         "http") else torch.load(args.pretrained, map_location="cpu")
-    tb.add_row(["Initialize by", args.pretrained])
+    if args.gpu == 0:
+        tb.add_row([f"Initialize by", args.pretrained])
     if args.arch == 'resnet50':
         # rename moco pre-trained keys
         state_dict = checkpoint['state_dict']
