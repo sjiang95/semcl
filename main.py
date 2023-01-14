@@ -185,20 +185,6 @@ def main():
     if args.dist_url == "env://" and args.world_size == -1:
         args.world_size = int(os.environ["WORLD_SIZE"])
 
-    global iter_mode_global
-    if args.iters is not None and args.epochs is not None:
-        raise AssertionError(
-            "You can set either `--iters` or `--epochs`, not both.")
-    elif args.iters is not None and args.epochs is None:
-        iter_mode_global = 'iters'
-    elif args.iters is None and args.epochs is not None:
-        iter_mode_global = 'epochs'
-    elif args.iters is None and args.epochs is None:
-        args.iters = 30000
-        print(
-            f"Neither `--iters` nor `--epochs` is given, set total iterations to {args.iters}")
-        iter_mode_global = 'iters'
-
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
 
     assert args.distributed, "SyncBN depends on distributed training. If you really want to continue, comment out this line and take the risk of poor reults."
@@ -237,6 +223,21 @@ def main_worker(gpu, ngpus_per_node, args):
         def print_pass(*args):
             pass
         builtins.print = print_pass
+
+    global iter_mode_global # Even global variables cannot share across processings. See https://stackoverflow.com/a/11215750. Solution is to set these vars inside each processing.
+    if args.iters is not None and args.epochs is not None:
+        raise AssertionError(
+            "You can set either `--iters` or `--epochs`, not both.")
+    elif args.iters is not None and args.epochs is None:
+        iter_mode_global = 'iters'
+    elif args.iters is None and args.epochs is not None:
+        iter_mode_global = 'epochs'
+    elif args.iters is None and args.epochs is None:
+        args.iters = 30000
+        print(
+            f"Neither `--iters` nor `--epochs` is given, set total iterations to {args.iters}")
+        iter_mode_global = 'iters'
+    print(f"Iteration mode: {iter_mode_global}")
 
     if args.multiprocessing_distributed:
         print(f"Use GPU: {args.gpu} for printing")
@@ -601,7 +602,6 @@ def train(train_loader, model, optimizer, lr_scheduler, scaler, summary_writer, 
     # use condition i >= math.floor(iters_per_epoch/args.grad_accum)*args.grad_accum to remove tail mini-batch if iters_per_epoch cannot be evenly divided by args.grad_accum
     iters_per_epoch = math.floor(
         len(train_loader)/args.grad_accum)*args.grad_accum
-    global moco_m_global
     for i, (anchor_images, nanchor_images) in enumerate(train_loader):
         # measure data loading time
         data_time.update(time.time() - end)
@@ -609,7 +609,7 @@ def train(train_loader, model, optimizer, lr_scheduler, scaler, summary_writer, 
         # check iterations
         cur_iters = epoch*iters_per_epoch+i
         if (iter_mode_global == 'iters' and cur_iters >= args.iters) or i >= iters_per_epoch:
-            progress.display(cur_iters-1)  # print status of last iteration
+            progress.display(cur_iters)  # print status of last iteration
             break
 
         if args.gpu is not None:
