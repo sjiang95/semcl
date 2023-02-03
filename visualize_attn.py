@@ -26,6 +26,17 @@ from pytorch_grad_cam import GradCAM, \
 from pytorch_grad_cam.utils.image import show_cam_on_image
 from pytorch_grad_cam.ablation_layer import AblationLayerVit
 
+methods = \
+    {"gradcam": GradCAM,
+     "scorecam": ScoreCAM,
+     "gradcam++": GradCAMPlusPlus,
+     "ablationcam": AblationCAM,
+     "xgradcam": XGradCAM,
+     "eigencam": EigenCAM,
+     "eigengradcam": EigenGradCAM,
+     "layercam": LayerCAM,
+     "fullgrad": FullGrad}
+    
 pretrained_weight_url = {
     'swin_tiny': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.8/swin_tiny_patch4_window7_224_22k.pth',
     'swin_small': 'https://github.com/SwinTransformer/storage/releases/download/v1.0.8/swin_small_patch4_window7_224_22k.pth',
@@ -72,6 +83,7 @@ def get_args():
         '--method',
         type=str,
         default='scorecam',
+        choices=methods.keys(),
         help='Can be gradcam/gradcam++/scorecam/xgradcam/ablationcam')
 
     args = parser.parse_args()
@@ -95,25 +107,7 @@ def reshape_transform(tensor, height=7, width=7):
 
 
 if __name__ == '__main__':
-    """ python swinT_example.py -image-path <path_to_image>
-    Example usage of using cam-methods on a SwinTransformers network.
-
-    """
-
     args = get_args()
-    methods = \
-        {"gradcam": GradCAM,
-         "scorecam": ScoreCAM,
-         "gradcam++": GradCAMPlusPlus,
-         "ablationcam": AblationCAM,
-         "xgradcam": XGradCAM,
-         "eigencam": EigenCAM,
-         "eigengradcam": EigenGradCAM,
-         "layercam": LayerCAM,
-         "fullgrad": FullGrad}
-
-    if args.method not in list(methods.keys()):
-        raise Exception(f"method should be one of {list(methods.keys())}")
     
     # Retrieve pretrained weights
     checkpoint=None
