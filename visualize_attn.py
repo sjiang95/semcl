@@ -61,8 +61,6 @@ def get_args():
                         help='model architecture: ' +
                             ' | '.join(model_names) +
                             ' (default: swin_tiny)')
-    parser.add_argument('--use-cuda', action='store_true', default=False,
-                        help='Use NVIDIA GPU acceleration')
     parser.add_argument('--pretrained', default='', type=str,
         help="Path to pretrained weights to load.")
     parser.add_argument(
@@ -87,11 +85,6 @@ def get_args():
         help='Can be gradcam/gradcam++/scorecam/xgradcam/ablationcam')
 
     args = parser.parse_args()
-    args.use_cuda = torch.cuda.is_available()
-    if args.use_cuda:
-        print('Using GPU for acceleration')
-    else:
-        print('Using CPU for computation')
 
     return args
 
@@ -124,8 +117,8 @@ if __name__ == '__main__':
     model = swin_transformer.__dict__[args.arch](state_dict=checkpoint["state_dict" if "state_dict" in checkpoint else "model"])
     model.eval()
 
-    if args.use_cuda:
-        model = model.cuda()
+    device="cuda" if torch.cuda.is_available() else "cpu"
+    model = model.to(device)
 
     target_layers = [model.layers[-1].blocks[-1].norm2]
 
@@ -135,13 +128,13 @@ if __name__ == '__main__':
     if args.method == "ablationcam":
         cam = methods[args.method](model=model,
                                    target_layers=target_layers,
-                                   use_cuda=args.use_cuda,
+                                   use_cuda=torch.cuda.is_available(),
                                    reshape_transform=reshape_transform,
                                    ablation_layer=AblationLayerVit())
     else:
         cam = methods[args.method](model=model,
                                    target_layers=target_layers,
-                                   use_cuda=args.use_cuda,
+                                   use_cuda=torch.cuda.is_available(),
                                    reshape_transform=reshape_transform)
 
     # open image
@@ -182,7 +175,6 @@ if __name__ == '__main__':
         transforms.CenterCrop(args.crop_size),
     ])
     croppedImg=cv2.cvtColor(np.array(cropRawImg(img)), cv2.COLOR_RGB2BGR)
-    print(type(croppedImg))
     img2tensor=transforms.ToTensor()
     cam_image = show_cam_on_image(torch.permute(img2tensor(croppedImg),dims=(1,2,0)).numpy(), grayscale_cam)
     cv2.imwrite(fname, cam_image)
