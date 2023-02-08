@@ -13,7 +13,7 @@ model_all_layer.ipynb
 model_structre.ipynb
 dataset_conv
 *.sh
-visualize_attention/
+visualize_attention/*.png
 data
 work_dirs
 *.pth
