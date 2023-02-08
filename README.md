@@ -61,13 +61,13 @@ Below are examples for SemCL pretraining.
 For single node training, run
 
 ```shell
-python3 main.py -b 64 --optimizer=adamw --lr=1.5e-4 --weight-decay=.1 --stop-grad-conv1 --moco-m-cos --moco-t=.2 --dist-url 'tcp://localhost:10001' --multiprocessing-distributed --world-size 1 --rank 0 --print-freq 1000 --dataset voc ade coco
+python main.py -a swin_tiny -b 64 --optimizer=adamw --lr=1.5e-4 --weight-decay=.1 --stop-grad-conv1 --moco-m-cos --moco-t=.2 --dist-url 'tcp://localhost:10001' --multiprocessing-distributed --world-size 1 --rank 0 --print-freq 1000 --dataset voc ade coco
 ```
 
 For multi-node (let's say N nodes) training, on the first node, run:
 
 ```shell
-python3 main.py -b 64 --optimizer=adamw --lr=1.5e-4 --weight-decay=.1 --stop-grad-conv1 --moco-m-cos --moco-t=.2 --dist-url 'tcp://[your first node address]:[specified port]' --multiprocessing-distributed --world-size N --rank 0 --print-freq 1000 --dataset voc ade coco
+python main.py -a swin_tiny -b 64 --optimizer=adamw --lr=1.5e-4 --weight-decay=.1 --stop-grad-conv1 --moco-m-cos --moco-t=.2 --dist-url 'tcp://[your first node address]:[specified port]' --multiprocessing-distributed --world-size N --rank 0 --print-freq 1000 --dataset voc ade coco
 ```
 
 From the second node, run the same command with `--rank 1` to `--rank N-1`.
