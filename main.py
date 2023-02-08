@@ -61,11 +61,11 @@ num_steps = None
 parser = argparse.ArgumentParser(description='SemCL Pre-Training')
 parser.add_argument('--dataroot', metavar='Path2ContrastivePairs', default='data',
                     help='path to dataset')
-parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet50',
+parser.add_argument('-a', '--arch', metavar='ARCH', default='swin_tiny',
                     type=str, choices=model_names,
                     help='model architecture: ' +
                     ' | '.join(model_names) +
-                    ' (default: resnet50)')
+                    ' (default: swin_tiny)')
 parser.add_argument('--pretrained', default='', type=str, metavar='PATH2pretrainedWeights',
                     help="Path to pretrained weights having same architecture with --arch option.")
 parser.add_argument('-j', '--workers', default=multiprocessing.cpu_count(), type=int, metavar='num_workers_per_gpu',
