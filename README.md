@@ -2,9 +2,31 @@
 
 ## Introduction
 
-This is a PyTorch implementation of [MoCo v3](https://arxiv.org/abs/2104.02057) for self-supervised ResNet and ViT.
+This is a PyTorch implementation of SemCL for self-supervised ResNets and Swin Transformers. The following practice is tested on Ubuntu 20.04 LTS.
 
-The original MoCo v3 was implemented in Tensorflow and run in TPUs. This repo re-implements in PyTorch and GPUs. Despite the library and numerical differences, this repo reproduces the results and observations in the paper.
+## Prerequisite
+
+Clone and enter this repo.
+
+```shell
+git clone https://github.com/sjiang95/semclTraining
+cd semclTraining
+```
+
+PyTorch [1.8.2 LTS](https://pytorch.org/get-started/previous-versions/#v182-with-lts-support)
+
+```shell
+conda create -n semcl pytorch torchvision torchaudio cudatoolkit=11.1 -c pytorch-lts -c nvidia
+conda activate semcl
+```
+
+Other utils
+
+```shell
+conda install -c conda-forge prettytable torchinfo opencv grad-cam
+```
+
+where `prettytable` is used to formatting output during pretraining, `torchinfo` prints network structure in `moco2bkb.py`, and `opencv`&`grad-cam` are necessary for attention visualization.
 
 ## Usage: Preparation
 
