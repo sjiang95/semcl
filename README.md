@@ -78,4 +78,22 @@ From the second node, run the same command with `--rank 1` to `--rank N-1`.
 2. The learning rate specified by `--lr` is the *base* lr, and is adjusted by the [linear lr scaling rule](https://arxiv.org/abs/1706.02677).
 3. Using a smaller batch size has a more stable result (see paper), but has lower speed.
 
+## Extract backbone
+
+In MoCo framework we use, there are `base_encoder` and `momentum_encoder` in the saved pretrained model. It is the `base_encoder` that should be extracted for downstream tasks, including attention visualization. To this end, we provide a script `moco2bkb.py` to extract the `base_encoder`.
+
+```shell
+python moco2bkb.py -a swin_tiny /path/to/pretrained/checkpoint
+```
+
+The extracted backbone will be saved to `/path/to/pretrained/bkb_checkpoint`.
+
+## Attention visualization
+
+The script `visualize_attn.py`, together with the sample images in `visualize_attention/` we used in the paper, is provided for attention visualization.
+
+```shell
+python visualize_attn.py -a swin_tiny --pretrained /path/to/pretrained/bkb_checkpoint --img-path visualize_attention/2008_000345.jpg
+```
+
 ## Citation
