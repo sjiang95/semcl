@@ -23,7 +23,7 @@ conda activate semcl
 Or, manually.
 
 ```shell
-conda create -n semcl pytorch torchvision pytorch-cuda=11.7 -c pytorch -c nvidia
+conda create -n semcl pytorch=1.13 torchvision=0.14 pytorch-cuda=11.7 -c pytorch -c nvidia
 conda activate semcl
 ```
 
