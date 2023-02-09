@@ -1,8 +1,6 @@
 import argparse
 import os
 import sys
-import requests
-from io import BytesIO
 
 from PIL import Image
 import cv2
@@ -138,14 +136,7 @@ if __name__ == '__main__':
                                    reshape_transform=reshape_transform)
 
     # open image
-    if args.img_path is None:
-        # user has not specified any image - we use our own image
-        print("Please use the `--img_path` argument to indicate the path of the image you wish to visualize.")
-        print("Since no image path have been provided, we take the first image in our paper.")
-        response = requests.get("https://dl.fbaipublicfiles.com/dino/img.png")
-        img = Image.open(BytesIO(response.content))
-        img = img.convert('RGB')
-    elif os.path.isfile(args.img_path):
+    if os.path.isfile(args.img_path):
         with open(args.img_path, 'rb') as f:
             img = Image.open(f)
             img = img.convert('RGB')
