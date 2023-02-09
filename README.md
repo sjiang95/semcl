@@ -22,10 +22,8 @@ conda activate semcl
 
 Or, manually.
 
-PyTorch [1.8.2 LTS](https://pytorch.org/get-started/previous-versions/#v182-with-lts-support)
-
 ```shell
-conda create -n semcl pytorch torchvision torchaudio cudatoolkit=11.1 -c pytorch-lts -c nvidia
+conda create -n semcl pytorch torchvision pytorch-cuda=11.7 -c pytorch -c nvidia
 conda activate semcl
 ```
 
@@ -36,13 +34,11 @@ We use the implementation of [RElbers/info-nce-pytorch](https://github.com/RElbe
 pip install info-nce-pytorch
 ```
 
-Other utils
+Install `prettytable` to formatting output during pretraining.
 
 ```shell
-conda install -c conda-forge prettytable torchinfo opencv grad-cam
+conda install -c conda-forge prettytable
 ```
-
-where `prettytable` is used to formatting output during pretraining, `torchinfo` prints network structure in `moco2bkb.py`, and `opencv`&`grad-cam` are necessary for attention visualization.
 
 ## Dataset
 
@@ -82,6 +78,14 @@ From the second node, run the same command with `--rank 1` to `--rank N-1`.
 
 In MoCo framework we use, there are `base_encoder` and `momentum_encoder` in the saved pretrained model. It is the `base_encoder` that should be extracted for downstream tasks, including attention visualization. To this end, we provide a script `moco2bkb.py` to extract the `base_encoder`.
 
+Install `torchinfo`
+
+```shell
+conda install -c conda-forge torchinfo
+```
+
+run
+
 ```shell
 python moco2bkb.py -a swin_tiny /path/to/pretrained/checkpoint
 ```
@@ -90,7 +94,13 @@ The extracted backbone will be saved to `/path/to/pretrained/bkb_checkpoint`.
 
 ## Attention visualization
 
-The script `visualize_attn.py`, together with the sample images in `visualize_attention/` we used in the paper, is provided for attention visualization.
+The script `visualize_attn.py`, together with the sample images in `visualize_attention/` we used in the paper, is provided for attention visualization. Install `opencv` and `grad-cam`
+
+```shell
+conda install -c conda-forge opencv grad-cam
+```
+
+then run
 
 ```shell
 python visualize_attn.py -a swin_tiny --pretrained /path/to/pretrained/bkb_checkpoint --img-path visualize_attention/2008_000345.jpg
