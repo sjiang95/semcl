@@ -311,16 +311,16 @@ class ExtNormalize(object):
         self.mean = mean
         self.std = std
 
-    def __call__(self, tensor, nanchor):
+    def __call__(self, anchor, nanchor):
         """
         Args:
-            tensor (Tensor): Tensor image of size (C, H, W) to be normalized.
-            tensor (Tensor): Tensor of label. A dummy input for ExtCompose
+            anchor (Tensor): Tensor image of size (C, H, W) to be normalized.
+            nanchor (Tensor): Tensor of label. A dummy input for ExtCompose
         Returns:
-            Tensor: Normalized Tensor image.
-            Tensor: Unchanged Tensor label
+            Tensor: Normalized anchor image.
+            Tensor: Normalized nanchor image.
         """
-        return F.normalize(tensor, self.mean, self.std), nanchor
+        return F.normalize(anchor, self.mean, self.std), F.normalize(nanchor, self.mean, self.std)
 
     def __repr__(self):
         return self.__class__.__name__ + '(mean={0}, std={1})'.format(self.mean, self.std)
