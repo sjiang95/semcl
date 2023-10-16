@@ -42,7 +42,7 @@ conda install -c conda-forge prettytable
 
 ## Dataset
 
-Follow semclDataset (add link) to prepare the SemCL dataset, and create a symlink
+Follow [semclDataset](https://github.com/sjiang95/semclDataset) to prepare the SemCL dataset, and create a symlink
 
 ```shell
 ln -s /path/to/ContrastivePairs data
