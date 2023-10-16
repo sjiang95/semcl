@@ -107,3 +107,14 @@ python visualize_attn.py -a swin_tiny --pretrained /path/to/pretrained/bkb_check
 ```
 
 ## Citation
+
+```bibtex
+@InProceedings{quan2023semantic,
+    author    = {Quan, Shengjiang and Hirano, Masahiro and Yamakawa, Yuji},
+    title     = {Semantic Information in Contrastive Learning},
+    booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
+    month     = {October},
+    year      = {2023},
+    pages     = {5686-5696}
+}
+```
